@@ -1,24 +1,22 @@
 import SwiftUI
 
-struct HomeView: View {
-    @Environment(AudioPlayerService.self) private var audioPlayer
-    
+struct LibraryView: View {
     var body: some View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()
                 
                 VStack(spacing: 16) {
-                    Image(systemName: "music.note.house.fill")
+                    Image(systemName: "square.stack.3d.down.right.fill")
                         .font(.system(size: 64))
                         .foregroundColor(Theme.mutedForeground)
                     
-                    Text("Accueil")
+                    Text("Bibliothèque")
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundColor(Theme.foreground)
                     
-                    Text("Bientôt disponible avec l'API /home")
+                    Text("En cours de développement...")
                         .foregroundColor(Theme.mutedForeground)
                 }
             }
@@ -28,6 +26,5 @@ struct HomeView: View {
 }
 
 #Preview {
-    HomeView()
-        .environment(AudioPlayerService())
+    LibraryView()
 }

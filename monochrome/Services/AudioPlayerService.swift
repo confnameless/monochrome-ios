@@ -9,12 +9,13 @@ class AudioPlayerService {
     var isPlaying: Bool = false
     var currentTrackTitle: String = "No Track"
     var currentArtistName: String = "Unknown Artist"
+    var currentCoverUrl: URL? = nil
     
     init() {
         setupRemoteCommandCenter()
     }
     
-    func play(url: URL, title: String, artist: String) {
+    func play(url: URL, title: String, artist: String, coverUrl: URL? = nil) {
         let playerItem = AVPlayerItem(url: url)
         player = AVPlayer(playerItem: playerItem)
         player?.play()
@@ -22,6 +23,7 @@ class AudioPlayerService {
         isPlaying = true
         currentTrackTitle = title
         currentArtistName = artist
+        currentCoverUrl = coverUrl
         
         updateNowPlayingInfo()
     }

@@ -7,7 +7,7 @@ struct MonochromeIOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            MainTabView()
                 .environment(audioPlayerService)
                 .onAppear {
                     setupAudioSession()
