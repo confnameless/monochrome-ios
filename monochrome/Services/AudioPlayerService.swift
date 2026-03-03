@@ -27,9 +27,16 @@ class AudioPlayerService {
     var hasPreviousTrack: Bool { !playHistory.isEmpty }
     var hasNextTrack: Bool { !queuedTracks.isEmpty }
 
+    // Persistence keys
+    private let currentTrackKey = "monochrome_current_track"
+    private let playHistoryKey = "monochrome_play_history"
+    private let savedTimestampKey = "monochrome_saved_timestamp"
+    private var restoredTimestamp: TimeInterval = 0
+
     init() {
         setupRemoteCommandCenter()
         setupAudioSession()
+        restoreState()
     }
 
     private func setupAudioSession() {
@@ -87,6 +94,7 @@ class AudioPlayerService {
 
                     self.addTimeObserver()
                     self.updateNowPlayingInfo()
+                    self.saveState()
                 }
 
                 // Load duration asynchronously
@@ -120,6 +128,12 @@ class AudioPlayerService {
     }
 
     func togglePlayPause() {
+        // After a restore, player is nil — need to load the stream first
+        if player == nil, let track = currentTrack {
+            resumeRestoredTrack(track)
+            return
+        }
+
         if isPlaying {
             player?.pause()
         } else {
@@ -127,6 +141,57 @@ class AudioPlayerService {
         }
         isPlaying.toggle()
         updateNowPlayingInfo()
+    }
+
+    /// Loads the stream for a restored track and seeks to the saved timestamp
+    private func resumeRestoredTrack(_ track: Track) {
+        let seekTo = restoredTimestamp
+        restoredTimestamp = 0
+
+        Task {
+            guard let streamUrlStr = try? await MonochromeAPI().fetchStreamUrl(trackId: track.id),
+                  let url = URL(string: streamUrlStr) else { return }
+
+            let asset = AVURLAsset(url: url)
+            let playerItem = AVPlayerItem(asset: asset)
+
+            NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(playerItemDidReachEnd),
+                                                   name: .AVPlayerItemDidPlayToEndTime,
+                                                   object: playerItem)
+
+            await MainActor.run {
+                self.player = AVQueuePlayer(playerItem: playerItem)
+                self.player?.play()
+                self.isPlaying = true
+                self.addTimeObserver()
+                self.updateNowPlayingInfo()
+            }
+
+            // Seek to saved position
+            if seekTo > 0 {
+                let targetTime = CMTime(seconds: seekTo, preferredTimescale: 1000)
+                await self.player?.seek(to: targetTime)
+            }
+
+            // Load duration
+            if let durationSeconds = try? await asset.load(.duration).seconds, !durationSeconds.isNaN {
+                await MainActor.run {
+                    self.duration = durationSeconds
+                    self.updateNowPlayingInfo()
+                }
+            }
+
+            // Load artwork
+            if let coverUrl = MonochromeAPI().getImageUrl(id: track.album?.cover),
+               let (data, _) = try? await URLSession.shared.data(from: coverUrl),
+               let image = UIImage(data: data) {
+                await MainActor.run {
+                    self.nowPlayingArtwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                    self.updateNowPlayingInfo()
+                }
+            }
+        }
     }
 
     func seek(to time: TimeInterval) {
@@ -182,6 +247,7 @@ class AudioPlayerService {
             player?.pause()
             isPlaying = false
             updateNowPlayingInfo()
+            saveState()
             return
         }
 
@@ -240,6 +306,7 @@ class AudioPlayerService {
 
                     self.addTimeObserver()
                     self.updateNowPlayingInfo()
+                    self.saveState()
                 }
 
                 if let durationSeconds = try? await asset.load(.duration).seconds, !durationSeconds.isNaN {
@@ -294,6 +361,50 @@ class AudioPlayerService {
         }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+    }
+
+    // MARK: - Persistence
+
+    private func saveState() {
+        if let track = currentTrack, let data = try? JSONEncoder().encode(track) {
+            UserDefaults.standard.set(data, forKey: currentTrackKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: currentTrackKey)
+        }
+
+        // Save current playback position
+        UserDefaults.standard.set(currentTime, forKey: savedTimestampKey)
+
+        let historyToSave = Array(playHistory.suffix(20)) // Keep last 20
+        if let data = try? JSONEncoder().encode(historyToSave) {
+            UserDefaults.standard.set(data, forKey: playHistoryKey)
+        }
+    }
+
+    private func restoreState() {
+        // Restore play history
+        if let data = UserDefaults.standard.data(forKey: playHistoryKey),
+           let tracks = try? JSONDecoder().decode([Track].self, from: data) {
+            self.playHistory = tracks
+        }
+
+        // Restore current track (paused state, not auto-playing)
+        if let data = UserDefaults.standard.data(forKey: currentTrackKey),
+           let track = try? JSONDecoder().decode(Track.self, from: data) {
+            self.currentTrack = track
+            self.currentTrackTitle = track.title
+            self.currentArtistName = track.artist?.name ?? "Unknown Artist"
+            self.currentAlbumTitle = track.album?.title ?? ""
+            self.currentCoverUrl = MonochromeAPI().getImageUrl(id: track.album?.cover)
+            self.isPlaying = false
+
+            // Restore saved timestamp for resume
+            let savedTime = UserDefaults.standard.double(forKey: savedTimestampKey)
+            if savedTime > 0 {
+                self.restoredTimestamp = savedTime
+                self.currentTime = savedTime
+            }
+        }
     }
 
     deinit {
