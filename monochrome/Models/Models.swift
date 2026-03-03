@@ -34,6 +34,7 @@ struct Album: Identifiable, Codable, Hashable {
     let numberOfTracks: Int?
     let releaseDate: String?
     let artist: Artist?
+    let type: String?
 
     var releaseYear: String? {
         guard let d = releaseDate, d.count >= 4 else { return nil }
@@ -52,14 +53,6 @@ struct SearchResponse: Codable {
 
 struct SearchData: Codable {
     let items: [Track]
-}
-
-struct EditorPick: Identifiable, Codable {
-    let id: Int
-    let type: String
-    let title: String?
-    let artist: Artist?
-    let cover: String?
 }
 
 struct ArtistResponse: Codable {

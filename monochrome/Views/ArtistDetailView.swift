@@ -5,142 +5,160 @@ struct ArtistDetailView: View {
     @Binding var navigationPath: NavigationPath
     @Environment(AudioPlayerService.self) private var audioPlayer
     @Environment(LibraryManager.self) private var libraryManager
+
     @State private var artistDetail: ArtistDetail?
+    @State private var bio: String?
+    @State private var similarArtists: [Artist] = []
     @State private var isLoading = true
     @State private var showAllTracks = false
+    @State private var showFullBio = false
+    @State private var discoFilter: DiscoFilter = .all
+
+    enum DiscoFilter: String, CaseIterable {
+        case all = "Tout"
+        case albums = "Albums"
+        case singles = "Singles"
+    }
 
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    // Hero header
-                    artistHeader
-
-                    // Content
-                    VStack(alignment: .leading, spacing: 28) {
-                        // Shuffle play button
-                        if let detail = artistDetail, !detail.topTracks.isEmpty {
-                            shuffleButton(tracks: detail.topTracks)
-                        }
-
-                        // Popular tracks
-                        if let detail = artistDetail, !detail.topTracks.isEmpty {
-                            popularTracksSection(tracks: detail.topTracks)
-                        }
-
-                        // Albums / Discography
-                        if let detail = artistDetail, !detail.albums.isEmpty {
-                            discographySection(albums: detail.albums)
-                        }
-
-                        Spacer(minLength: 120)
-                    }
-                    .padding(.top, 16)
-                }
-            }
-
             if isLoading {
                 ProgressView().tint(Theme.mutedForeground)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        heroHeader
+                        contentSection
+                    }
+                }
+                .ignoresSafeArea(edges: .top)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(artist.name)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Theme.foreground)
-            }
-        }
-        .toolbarBackground(Theme.background.opacity(0.8), for: .navigationBar)
-        .task { await loadArtist() }
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .task { await loadAllData() }
     }
 
-    // MARK: - Hero Header
+    // MARK: - Hero Header (Spotify style)
 
-    private var artistHeader: some View {
-        ZStack(alignment: .bottomLeading) {
-            // Artist image
-            AsyncImage(url: MonochromeAPI().getImageUrl(id: artist.picture, size: 750)) { phase in
-                if let image = phase.image {
-                    image.resizable()
-                         .aspectRatio(contentMode: .fill)
-                         .frame(height: 340)
-                         .clipped()
-                         .overlay(
-                            LinearGradient(
-                                colors: [.clear, .clear, Theme.background.opacity(0.6), Theme.background],
-                                startPoint: .top, endPoint: .bottom
+    private var heroHeader: some View {
+        GeometryReader { geo in
+            let minY = geo.frame(in: .global).minY
+            let height: CGFloat = 380
+
+            ZStack(alignment: .bottomLeading) {
+                // Artist image with parallax
+                AsyncImage(url: MonochromeAPI().getImageUrl(id: artist.picture, size: 750)) { phase in
+                    if let image = phase.image {
+                        image.resizable()
+                             .aspectRatio(contentMode: .fill)
+                             .frame(width: geo.size.width, height: minY > 0 ? height + minY : height)
+                             .clipped()
+                             .offset(y: minY > 0 ? -minY : 0)
+                    } else {
+                        Rectangle().fill(Theme.secondary)
+                            .frame(height: height)
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 64))
+                                    .foregroundColor(Theme.mutedForeground.opacity(0.2))
                             )
-                         )
-                } else {
-                    Rectangle().fill(Theme.secondary)
-                        .frame(height: 340)
-                        .overlay(
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 60))
-                                .foregroundColor(Theme.mutedForeground.opacity(0.3))
-                        )
+                    }
                 }
-            }
-            .frame(height: 340)
 
-            // Name overlay
-            VStack(alignment: .leading, spacing: 6) {
-                Text(artist.name)
-                    .font(.system(size: 42, weight: .bold))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.6), radius: 8, y: 2)
+                // Gradient overlay
+                LinearGradient(
+                    colors: [.clear, .clear, Theme.background.opacity(0.7), Theme.background],
+                    startPoint: .top, endPoint: .bottom
+                )
 
-                if let pop = artistDetail?.popularity, pop > 0 {
-                    Text("\(pop)% de popularite")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
+                // Name + info
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(artist.name)
+                        .font(.system(size: 44, weight: .black))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.7), radius: 10, y: 2)
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(2)
+
+                    if let pop = artistDetail?.popularity, pop > 0 {
+                        Text("\(formatNumber(pop * 10000)) auditeurs mensuels")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
+            .frame(height: height)
         }
+        .frame(height: 380)
     }
 
-    // MARK: - Shuffle Play Button
+    // MARK: - Content
 
-    @ViewBuilder
-    private func shuffleButton(tracks: [Track]) -> some View {
-        HStack {
+    private var contentSection: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            // Action buttons row
+            actionButtons
+
+            // Popular tracks
+            if let detail = artistDetail, !detail.topTracks.isEmpty {
+                popularTracks(detail.topTracks)
+            }
+
+            // Discography
+            if let detail = artistDetail, !detail.albums.isEmpty {
+                discography(detail.albums)
+            }
+
+            // About / Bio
+            if let bioText = bio, !bioText.isEmpty {
+                aboutSection(bioText)
+            }
+
+            // Similar artists
+            if !similarArtists.isEmpty {
+                similarArtistsSection
+            }
+
+            Spacer(minLength: 120)
+        }
+        .padding(.top, 12)
+    }
+
+    // MARK: - Action Buttons (Spotify: shuffle + play)
+
+    private var actionButtons: some View {
+        HStack(spacing: 16) {
+            // Shuffle
             Button(action: {
+                guard let tracks = artistDetail?.topTracks, !tracks.isEmpty else { return }
                 let shuffled = tracks.shuffled()
-                if let first = shuffled.first {
-                    audioPlayer.play(track: first, queue: Array(shuffled.dropFirst()))
-                }
+                audioPlayer.play(track: shuffled[0], queue: Array(shuffled.dropFirst()))
             }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "shuffle")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("Lecture aleatoire")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundColor(Theme.primaryForeground)
-                .padding(.horizontal, 32)
-                .padding(.vertical, 12)
-                .background(Theme.primary)
-                .clipShape(Capsule())
+                Image(systemName: "shuffle")
+                    .font(.system(size: 22))
+                    .foregroundColor(Theme.mutedForeground)
             }
 
             Spacer()
 
+            // Play button (Spotify green circle -> white circle in monochrome)
             Button(action: {
-                if let first = tracks.first {
-                    audioPlayer.play(track: first, queue: Array(tracks.dropFirst()))
-                }
+                guard let tracks = artistDetail?.topTracks, let first = tracks.first else { return }
+                audioPlayer.play(track: first, queue: Array(tracks.dropFirst()))
             }) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(Theme.foreground)
-                    .frame(width: 48, height: 48)
-                    .background(Theme.secondary)
-                    .clipShape(Circle())
+                ZStack {
+                    Circle().fill(Theme.foreground)
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(Theme.primaryForeground)
+                        .offset(x: 2)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -149,34 +167,33 @@ struct ArtistDetailView: View {
     // MARK: - Popular Tracks
 
     @ViewBuilder
-    private func popularTracksSection(tracks: [Track]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Titres populaires")
+    private func popularTracks(_ tracks: [Track]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Populaires")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(Theme.foreground)
                 .padding(.horizontal, 16)
+                .padding(.bottom, 4)
 
             let displayed = showAllTracks ? tracks : Array(tracks.prefix(5))
 
             ForEach(Array(displayed.enumerated()), id: \.element.id) { index, track in
                 let queue = Array(tracks.dropFirst(index + 1))
                 TrackRow(
-                    track: track,
-                    queue: queue,
-                    showCover: true,
-                    showIndex: index + 1,
+                    track: track, queue: queue,
+                    showCover: true, showIndex: index + 1,
                     navigationPath: $navigationPath
                 )
             }
 
             if tracks.count > 5 {
-                Button(action: { withAnimation { showAllTracks.toggle() } }) {
+                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showAllTracks.toggle() } }) {
                     Text(showAllTracks ? "Afficher moins" : "Voir plus")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(Theme.mutedForeground)
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 4)
+                .padding(.top, 8)
             }
         }
     }
@@ -184,16 +201,40 @@ struct ArtistDetailView: View {
     // MARK: - Discography
 
     @ViewBuilder
-    private func discographySection(albums: [Album]) -> some View {
+    private func discography(_ albums: [Album]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Discographie")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(Theme.foreground)
-                .padding(.horizontal, 16)
+            HStack {
+                Text("Discographie")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(Theme.foreground)
 
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+
+            // Filter chips
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 14) {
-                    ForEach(albums) { album in
+                HStack(spacing: 8) {
+                    ForEach(DiscoFilter.allCases, id: \.self) { filter in
+                        Button(action: { discoFilter = filter }) {
+                            Text(filter.rawValue)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(discoFilter == filter ? Theme.primaryForeground : Theme.foreground)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(discoFilter == filter ? Theme.foreground : Theme.secondary)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+
+            // Albums grid
+            let filtered = filterAlbums(albums)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 14) {
+                    ForEach(filtered) { album in
                         AlbumCard(album: album)
                     }
                 }
@@ -202,15 +243,193 @@ struct ArtistDetailView: View {
         }
     }
 
-    // MARK: - Load Data
-
-    private func loadArtist() async {
-        do {
-            artistDetail = try await MonochromeAPI().fetchArtist(id: artist.id)
-        } catch {
-            print("Error loading artist: \(error)")
+    private func filterAlbums(_ albums: [Album]) -> [Album] {
+        switch discoFilter {
+        case .all: return albums
+        case .albums: return albums.filter { ($0.numberOfTracks ?? 0) > 3 }
+        case .singles: return albums.filter { ($0.numberOfTracks ?? 0) <= 3 }
         }
+    }
+
+    // MARK: - About / Bio
+
+    @ViewBuilder
+    private func aboutSection(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("A propos")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Theme.foreground)
+                .padding(.horizontal, 16)
+
+            // Bio card with artist image
+            Button(action: { showFullBio = true }) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Artist image in card
+                    AsyncImage(url: MonochromeAPI().getImageUrl(id: artist.picture, size: 480)) { phase in
+                        if let image = phase.image {
+                            image.resizable()
+                                 .aspectRatio(contentMode: .fill)
+                                 .frame(height: 180)
+                                 .clipped()
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    // Popularity
+                    if let pop = artistDetail?.popularity, pop > 0 {
+                        HStack(spacing: 4) {
+                            Text("\(formatNumber(pop * 10000))")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(Theme.foreground)
+                            Text("auditeurs mensuels")
+                                .font(.system(size: 13))
+                                .foregroundColor(Theme.mutedForeground)
+                        }
+                    }
+
+                    // Bio preview
+                    Text(cleanHtml(text))
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.mutedForeground)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                }
+                .padding(16)
+                .background(Theme.secondary.opacity(0.6))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+        }
+        .sheet(isPresented: $showFullBio) {
+            bioSheet(text)
+        }
+    }
+
+    @ViewBuilder
+    private func bioSheet(_ text: String) -> some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Artist image
+                    AsyncImage(url: MonochromeAPI().getImageUrl(id: artist.picture, size: 750)) { phase in
+                        if let image = phase.image {
+                            image.resizable()
+                                 .aspectRatio(contentMode: .fill)
+                                 .frame(height: 280)
+                                 .clipped()
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 16)
+
+                    if let pop = artistDetail?.popularity, pop > 0 {
+                        HStack(spacing: 4) {
+                            Text("\(formatNumber(pop * 10000))")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(Theme.foreground)
+                            Text("auditeurs mensuels")
+                                .font(.system(size: 14))
+                                .foregroundColor(Theme.mutedForeground)
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                    Text(cleanHtml(text))
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(Theme.foreground.opacity(0.9))
+                        .lineSpacing(4)
+                        .padding(.horizontal, 16)
+
+                    Spacer(minLength: 40)
+                }
+                .padding(.top, 8)
+            }
+            .background(Theme.background)
+            .navigationTitle(artist.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Fermer") { showFullBio = false }
+                        .foregroundColor(Theme.foreground)
+                }
+            }
+        }
+        .presentationDragIndicator(.visible)
+        .presentationBackground(Theme.background)
+    }
+
+    // MARK: - Similar Artists
+
+    private var similarArtistsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Les fans aiment aussi")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Theme.foreground)
+                .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 16) {
+                    ForEach(similarArtists) { similarArtist in
+                        Button(action: { navigationPath.append(similarArtist) }) {
+                            VStack(spacing: 8) {
+                                AsyncImage(url: MonochromeAPI().getImageUrl(id: similarArtist.picture, size: 320)) { phase in
+                                    if let image = phase.image {
+                                        image.resizable().aspectRatio(contentMode: .fill)
+                                    } else {
+                                        Circle().fill(Theme.secondary)
+                                            .overlay(
+                                                Image(systemName: "person.fill")
+                                                    .foregroundColor(Theme.mutedForeground.opacity(0.3))
+                                            )
+                                    }
+                                }
+                                .frame(width: 120, height: 120)
+                                .clipShape(Circle())
+
+                                Text(similarArtist.name)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Theme.mutedForeground)
+                                    .lineLimit(1)
+                            }
+                            .frame(width: 120)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    // MARK: - Data Loading
+
+    private func loadAllData() async {
+        async let artistTask = MonochromeAPI().fetchArtist(id: artist.id)
+        async let bioTask = MonochromeAPI().fetchArtistBio(id: artist.id)
+        async let similarTask = MonochromeAPI().fetchSimilarArtists(id: artist.id)
+
+        do { artistDetail = try await artistTask } catch { print("Error loading artist: \(error)") }
+        bio = await bioTask
+        similarArtists = await similarTask
         isLoading = false
+    }
+
+    // MARK: - Helpers
+
+    private func formatNumber(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
+        if n >= 1_000 { return String(format: "%.0fK", Double(n) / 1_000) }
+        return "\(n)"
+    }
+
+    private func cleanHtml(_ text: String) -> String {
+        text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&#x27;", with: "'")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -220,7 +439,7 @@ struct AlbumCard: View {
     let album: Album
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             AsyncImage(url: MonochromeAPI().getImageUrl(id: album.cover)) { phase in
                 if let image = phase.image {
                     image.resizable().aspectRatio(contentMode: .fill)
@@ -236,11 +455,17 @@ struct AlbumCard: View {
                 .foregroundColor(Theme.foreground)
                 .lineLimit(1)
 
-            if let year = album.releaseYear {
-                Text(year)
-                    .font(.system(size: 11))
-                    .foregroundColor(Theme.mutedForeground)
+            HStack(spacing: 4) {
+                if let year = album.releaseYear {
+                    Text(year)
+                }
+                if let count = album.numberOfTracks {
+                    Text("·")
+                    Text("\(count) titres")
+                }
             }
+            .font(.system(size: 11))
+            .foregroundColor(Theme.mutedForeground)
         }
         .frame(width: 150)
     }
