@@ -1,43 +1,85 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @State private var selectedTab = 1
+    @State private var selectedTab = 0
+    @State private var navigationPath = NavigationPath()
     @Environment(AudioPlayerService.self) private var audioPlayer
-    
+
     var body: some View {
-        ZStack(alignment: .bottom) {
-            TabView(selection: $selectedTab) {
-                HomeView()
-                    .tabItem {
-                        Label("Accueil", systemImage: "house.fill")
+        NavigationStack(path: $navigationPath) {
+            ZStack(alignment: .bottom) {
+                // Content area
+                VStack(spacing: 0) {
+                    // Page content
+                    Group {
+                        switch selectedTab {
+                        case 0: HomeView(navigationPath: $navigationPath)
+                        case 1: SearchView(navigationPath: $navigationPath)
+                        case 2: LibraryView(navigationPath: $navigationPath)
+                        default: HomeView(navigationPath: $navigationPath)
+                        }
                     }
-                    .tag(0)
-                
-                SearchView()
-                    .tabItem {
-                        Label("Recherche", systemImage: "magnifyingglass")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    // Mini player + Tab bar spacer
+                    VStack(spacing: 0) {
+                        if audioPlayer.currentTrack != nil {
+                            MiniPlayerView()
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+
+                        // Custom tab bar
+                        HStack {
+                            TabBarButton(icon: "house.fill", label: "Accueil", isSelected: selectedTab == 0) { selectedTab = 0 }
+                            TabBarButton(icon: "magnifyingglass", label: "Rechercher", isSelected: selectedTab == 1) { selectedTab = 1 }
+                            TabBarButton(icon: "books.vertical.fill", label: "Bibliotheque", isSelected: selectedTab == 2) { selectedTab = 2 }
+                        }
+                        .padding(.top, 8)
+                        .padding(.bottom, 4)
+                        .background(
+                            LinearGradient(
+                                colors: [Theme.background, Theme.background.opacity(0.98)],
+                                startPoint: .bottom, endPoint: .top
+                            )
+                        )
                     }
-                    .tag(1)
-                
-                LibraryView()
-                    .tabItem {
-                        Label("Bibliothèque", systemImage: "play.square.stack.fill")
-                    }
-                    .tag(2)
+                }
             }
-            .accentColor(.white)
-            
-            // Mini Player Overlaid on top of tabs
-            if audioPlayer.isPlaying || audioPlayer.player != nil {
-                MiniPlayerView()
-                    .padding(.bottom, 50) // Adjust based on TabBar safe area
+            .background(Theme.background)
+            .navigationBarHidden(true)
+            .navigationDestination(for: Artist.self) { artist in
+                ArtistDetailView(artist: artist, navigationPath: $navigationPath)
             }
         }
         .preferredColorScheme(.dark)
     }
 }
 
+// MARK: - Tab Bar Button
+
+struct TabBarButton: View {
+    let icon: String
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(isSelected ? Theme.foreground : Theme.mutedForeground)
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 #Preview {
     MainTabView()
         .environment(AudioPlayerService())
+        .environment(LibraryManager.shared)
 }
