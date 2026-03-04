@@ -59,6 +59,12 @@ class AudioPlayerService {
 
         self.queuedTracks = queue
         self.currentTrack = track
+        self.currentTrackTitle = track.title
+        self.currentArtistName = track.artist?.name ?? "Unknown Artist"
+        self.currentAlbumTitle = track.album?.title ?? ""
+        self.currentCoverUrl = MonochromeAPI().getImageUrl(id: track.album?.cover)
+        self.currentTime = 0
+        self.duration = 0
 
         Task {
             if let streamUrlStr = try? await MonochromeAPI().fetchStreamUrl(trackId: track.id),
@@ -83,15 +89,7 @@ class AudioPlayerService {
                     }
 
                     self.player?.play()
-
                     self.isPlaying = true
-                    self.currentTrackTitle = track.title
-                    self.currentArtistName = track.artist?.name ?? "Unknown Artist"
-                    self.currentAlbumTitle = track.album?.title ?? ""
-                    self.currentCoverUrl = MonochromeAPI().getImageUrl(id: track.album?.cover)
-                    self.currentTime = 0
-                    self.duration = 0
-
                     self.addTimeObserver()
                     self.updateNowPlayingInfo()
                     self.saveState()
@@ -276,6 +274,12 @@ class AudioPlayerService {
         // Use internal play without pushing to history again
         removeTimeObserver()
         self.currentTrack = previous
+        self.currentTrackTitle = previous.title
+        self.currentArtistName = previous.artist?.name ?? "Unknown Artist"
+        self.currentAlbumTitle = previous.album?.title ?? ""
+        self.currentCoverUrl = MonochromeAPI().getImageUrl(id: previous.album?.cover)
+        self.currentTime = 0
+        self.duration = 0
 
         Task {
             if let streamUrlStr = try? await MonochromeAPI().fetchStreamUrl(trackId: previous.id),
@@ -297,13 +301,6 @@ class AudioPlayerService {
 
                     self.player?.play()
                     self.isPlaying = true
-                    self.currentTrackTitle = previous.title
-                    self.currentArtistName = previous.artist?.name ?? "Unknown Artist"
-                    self.currentAlbumTitle = previous.album?.title ?? ""
-                    self.currentCoverUrl = MonochromeAPI().getImageUrl(id: previous.album?.cover)
-                    self.currentTime = 0
-                    self.duration = 0
-
                     self.addTimeObserver()
                     self.updateNowPlayingInfo()
                     self.saveState()

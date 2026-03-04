@@ -113,9 +113,14 @@ struct MiniPlayerView: View {
                             }
 
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                                if goNext { audioPlayer.nextTrack() }
-                                else { audioPlayer.previousTrack() }
-                                swipeOffset = 0
+                                // Disable animation so offset reset + track change happen in one frame
+                                var transaction = Transaction()
+                                transaction.disablesAnimations = true
+                                withTransaction(transaction) {
+                                    if goNext { audioPlayer.nextTrack() }
+                                    else { audioPlayer.previousTrack() }
+                                    swipeOffset = 0
+                                }
                             }
                         } else {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
