@@ -7,6 +7,7 @@ struct MiniPlayerView: View {
 
     @State private var swipeOffset: CGFloat = 0
     @State private var dragAxis: DragAxis = .undecided
+    @State private var isDragging = false
 
     private enum DragAxis { case undecided, horizontal, vertical }
 
@@ -17,21 +18,24 @@ struct MiniPlayerView: View {
                 let w = geo.size.width
                 ZStack {
                     // Previous track (slides in from left)
-                    if swipeOffset > 0, let prev = audioPlayer.playHistory.last {
+                    if let prev = audioPlayer.playHistory.last {
                         miniTrackRow(title: prev.title, artist: prev.artist?.name ?? "Unknown Artist",
                                      coverUrl: MonochromeAPI().getImageUrl(id: prev.album?.cover))
-                            .offset(x: -w + swipeOffset)
+                            .frame(width: w)
+                            .offset(x: -w + max(0, swipeOffset))
                     }
 
                     // Current track (follows finger)
                     currentTrackRow
+                        .frame(width: w)
                         .offset(x: swipeOffset)
 
                     // Next track (slides in from right)
-                    if swipeOffset < 0, let next = audioPlayer.queuedTracks.first {
+                    if let next = audioPlayer.queuedTracks.first {
                         miniTrackRow(title: next.title, artist: next.artist?.name ?? "Unknown Artist",
                                      coverUrl: MonochromeAPI().getImageUrl(id: next.album?.cover))
-                            .offset(x: w + swipeOffset)
+                            .frame(width: w)
+                            .offset(x: w + min(0, swipeOffset))
                     }
                 }
                 .clipped()
@@ -53,22 +57,28 @@ struct MiniPlayerView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .padding(.horizontal, 8)
         .gesture(
-            DragGesture(minimumDistance: 12)
+            DragGesture(minimumDistance: 5)
                 .onChanged { value in
+                    isDragging = true
                     let dx = abs(value.translation.width)
                     let dy = abs(value.translation.height)
 
-                    if dragAxis == .undecided && (dx > 12 || dy > 12) {
+                    // Lock direction early
+                    if dragAxis == .undecided && (dx > 5 || dy > 5) {
                         dragAxis = dx > dy ? .horizontal : .vertical
                     }
 
                     switch dragAxis {
                     case .horizontal:
-                        // Don't allow swiping if no track in that direction
                         let raw = value.translation.width
-                        if raw > 0 && audioPlayer.playHistory.isEmpty { return }
-                        if raw < 0 && audioPlayer.queuedTracks.isEmpty { return }
-                        swipeOffset = raw
+                        // Block swipe if no track in that direction
+                        if raw > 0 && audioPlayer.playHistory.isEmpty {
+                            swipeOffset = 0
+                        } else if raw < 0 && audioPlayer.queuedTracks.isEmpty {
+                            swipeOffset = 0
+                        } else {
+                            swipeOffset = raw
+                        }
                     case .vertical:
                         let progress = -value.translation.height / UIScreen.main.bounds.height
                         expansion = max(0, min(1, progress))
@@ -80,32 +90,35 @@ struct MiniPlayerView: View {
                     let lockedAxis = dragAxis
                     dragAxis = .undecided
 
+                    // Delay resetting isDragging so tap doesn't fire
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        isDragging = false
+                    }
+
                     if lockedAxis == .horizontal {
                         let dx = value.translation.width
-                        let velocityX = value.predictedEndTranslation.width - dx
                         let screenW = UIScreen.main.bounds.width
+                        let hasPrev = !audioPlayer.playHistory.isEmpty
+                        let hasNext = !audioPlayer.queuedTracks.isEmpty
 
-                        // Threshold: 30% of width or fast velocity
-                        if (abs(dx) > screenW * 0.3 || abs(velocityX) > 400) {
-                            // Complete the slide
-                            let goNext = dx < 0
+                        // Confirm if dragged past 40%
+                        let goNext = dx < 0 && hasNext && abs(dx) > screenW * 0.4
+                        let goPrev = dx > 0 && hasPrev && abs(dx) > screenW * 0.4
+
+                        if goNext || goPrev {
                             let target: CGFloat = goNext ? -screenW : screenW
 
-                            withAnimation(.easeOut(duration: 0.2)) {
+                            withAnimation(.easeOut(duration: 0.18)) {
                                 swipeOffset = target
                             }
 
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                if goNext {
-                                    audioPlayer.nextTrack()
-                                } else {
-                                    audioPlayer.previousTrack()
-                                }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                                if goNext { audioPlayer.nextTrack() }
+                                else { audioPlayer.previousTrack() }
                                 swipeOffset = 0
                             }
                         } else {
-                            // Snap back
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 swipeOffset = 0
                             }
                         }
@@ -122,7 +135,7 @@ struct MiniPlayerView: View {
                             }
                         }
                     } else {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             swipeOffset = 0
                             expansion = 0
                         }
@@ -135,35 +148,36 @@ struct MiniPlayerView: View {
 
     private var currentTrackRow: some View {
         HStack(spacing: 10) {
-            Button(action: {
+            // Cover art + track info: tapping opens full player (only if not dragging)
+            HStack(spacing: 10) {
+                AsyncImage(url: audioPlayer.currentCoverUrl) { phase in
+                    if let image = phase.image {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        RoundedRectangle(cornerRadius: 4).fill(Theme.card)
+                    }
+                }
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(audioPlayer.currentTrackTitle)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Theme.foreground)
+                        .lineLimit(1)
+                    Text(audioPlayer.currentArtistName)
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.mutedForeground)
+                        .lineLimit(1)
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !isDragging else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                     expansion = 1
                 }
-            }) {
-                HStack(spacing: 10) {
-                    AsyncImage(url: audioPlayer.currentCoverUrl) { phase in
-                        if let image = phase.image {
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        } else {
-                            RoundedRectangle(cornerRadius: 4).fill(Theme.card)
-                        }
-                    }
-                    .frame(width: 40, height: 40)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(audioPlayer.currentTrackTitle)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Theme.foreground)
-                            .lineLimit(1)
-                        Text(audioPlayer.currentArtistName)
-                            .font(.system(size: 12))
-                            .foregroundColor(Theme.mutedForeground)
-                            .lineLimit(1)
-                    }
-                }
             }
-            .buttonStyle(.plain)
 
             Spacer()
 
@@ -187,7 +201,7 @@ struct MiniPlayerView: View {
         .padding(.vertical, 8)
     }
 
-    // MARK: - Generic track row for next/previous preview
+    // MARK: - Preview row for next/previous track
 
     private func miniTrackRow(title: String, artist: String, coverUrl: URL?) -> some View {
         HStack(spacing: 10) {
