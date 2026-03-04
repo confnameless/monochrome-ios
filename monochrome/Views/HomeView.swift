@@ -5,10 +5,10 @@ struct HomeView: View {
     @Environment(AudioPlayerService.self) private var audioPlayer
     @Environment(LibraryManager.self) private var libraryManager
 
-    @State private var searchText = ""
     @State private var searchResults: [Track] = []
     @State private var isSearching = false
     @State private var hasSearched = false
+    @State private var lastQuery = ""
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -19,39 +19,22 @@ struct HomeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search bar (always pinned at top)
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 16))
-                    .foregroundColor(Theme.mutedForeground)
-
-                TextField("What do you want to listen to?", text: $searchText)
-                    .font(.system(size: 16))
-                    .foregroundColor(Theme.foreground)
-                    .autocorrectionDisabled()
-                    .onSubmit { performSearch() }
-
-                if !searchText.isEmpty {
-                    Button(action: { searchText = ""; searchResults = []; hasSearched = false }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(Theme.mutedForeground)
-                    }
+            // Search bar (isolated view — typing won't re-render home content)
+            SearchBar(
+                onSearch: { query in
+                    lastQuery = query
+                    performSearch(query)
+                },
+                onClear: {
+                    searchResults = []
+                    hasSearched = false
+                    lastQuery = ""
                 }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Theme.secondary)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
+            )
 
             if hasSearched {
-                // Search results view (only after submit)
                 searchContent
             } else {
-                // Home content (visible while typing too)
                 homeContent
             }
         }
@@ -82,7 +65,7 @@ struct HomeView: View {
                 Text("No results for")
                     .font(.system(size: 16))
                     .foregroundColor(Theme.mutedForeground)
-                Text("\"\(searchText)\"")
+                Text("\"\(lastQuery)\"")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(Theme.foreground)
             }
@@ -95,24 +78,20 @@ struct HomeView: View {
     private var homeContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
-                // Greeting header
                 Text(greeting)
                     .font(.system(size: 26, weight: .bold))
                     .foregroundColor(Theme.foreground)
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
 
-                // Recently played
                 if !audioPlayer.playHistory.isEmpty || audioPlayer.currentTrack != nil {
                     recentlyPlayed
                 }
 
-                // Favorites quick access
                 if !libraryManager.favoriteTracks.isEmpty {
                     favoritesSection
                 }
 
-                // Empty state
                 if audioPlayer.playHistory.isEmpty && audioPlayer.currentTrack == nil && libraryManager.favoriteTracks.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "music.note")
@@ -199,16 +178,53 @@ struct HomeView: View {
 
     // MARK: - Search
 
-    private func performSearch() {
-        guard !searchText.isEmpty else { return }
+    private func performSearch(_ query: String) {
+        guard !query.isEmpty else { return }
         isSearching = true
         hasSearched = true
 
         Task {
-            do { searchResults = try await MonochromeAPI().searchTracks(query: searchText) }
+            do { searchResults = try await MonochromeAPI().searchTracks(query: query) }
             catch { print("Search error: \(error)") }
             isSearching = false
         }
+    }
+}
+
+// MARK: - Search Bar (isolated to prevent re-renders)
+
+private struct SearchBar: View {
+    let onSearch: (String) -> Void
+    let onClear: () -> Void
+    @State private var text = ""
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16))
+                .foregroundColor(Theme.mutedForeground)
+
+            TextField("What do you want to listen to?", text: $text)
+                .font(.system(size: 16))
+                .foregroundColor(Theme.foreground)
+                .autocorrectionDisabled()
+                .onSubmit { onSearch(text) }
+
+            if !text.isEmpty {
+                Button(action: { text = ""; onClear() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(Theme.mutedForeground)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Theme.secondary)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
     }
 }
 

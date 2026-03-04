@@ -10,47 +10,12 @@ struct MainTabView: View {
     private let fullScreenH = UIScreen.main.bounds.height
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Tab content inside NavigationStack — only content navigates
-            NavigationStack(path: $navigationPath) {
-                Group {
-                    switch selectedTab {
-                    case 0: HomeView(navigationPath: $navigationPath)
-                    case 1: LibraryView(navigationPath: $navigationPath)
-                    default: HomeView(navigationPath: $navigationPath)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Theme.background)
-                .navigationBarHidden(true)
-                .navigationDestination(for: Artist.self) { artist in
-                    ArtistDetailView(artist: artist, navigationPath: $navigationPath)
-                }
+        ZStack {
+            if #available(iOS 26.0, *) {
+                nativeTabView
+            } else {
+                legacyTabView
             }
-
-            // Bottom bar: mini player + glassmorphic tab bar (always visible)
-            VStack(spacing: 6) {
-                if audioPlayer.currentTrack != nil {
-                    MiniPlayerView(expansion: $playerExpansion)
-                        .opacity(playerExpansion > 0 ? 0 : 1)
-                        .allowsHitTesting(playerExpansion == 0)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-
-                HStack {
-                    TabBarButton(icon: "house.fill", label: "Home", isSelected: selectedTab == 0) { selectedTab = 0 }
-                    TabBarButton(icon: "books.vertical.fill", label: "Library", isSelected: selectedTab == 1) { selectedTab = 1 }
-                }
-                .padding(.top, 8)
-                .padding(.bottom, 5)
-                .background(.ultraThinMaterial)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.08))
-                        .frame(height: 0.5)
-                }
-            }
-            .padding(.bottom, 5)
 
             // Full-screen player overlay
             if audioPlayer.currentTrack != nil && playerExpansion > 0 {
@@ -68,6 +33,82 @@ struct MainTabView: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    // MARK: - iOS 26+ Native Liquid Glass TabView
+
+    @available(iOS 26.0, *)
+    private var nativeTabView: some View {
+        TabView(selection: $selectedTab) {
+            Tab("Home", systemImage: "house.fill", value: 0) {
+                NavigationStack(path: $navigationPath) {
+                    HomeView(navigationPath: $navigationPath)
+                        .navigationBarHidden(true)
+                        .navigationDestination(for: Artist.self) { artist in
+                            ArtistDetailView(artist: artist, navigationPath: $navigationPath)
+                        }
+                }
+            }
+
+            Tab("Library", systemImage: "books.vertical.fill", value: 1) {
+                NavigationStack(path: $navigationPath) {
+                    LibraryView(navigationPath: $navigationPath)
+                        .navigationBarHidden(true)
+                        .navigationDestination(for: Artist.self) { artist in
+                            ArtistDetailView(artist: artist, navigationPath: $navigationPath)
+                        }
+                }
+            }
+        }
+        .tabViewBottomAccessory {
+            if audioPlayer.currentTrack != nil {
+                MiniPlayerView(expansion: $playerExpansion)
+                    .opacity(playerExpansion > 0 ? 0 : 1)
+                    .allowsHitTesting(playerExpansion == 0)
+            }
+        }
+    }
+
+    // MARK: - Legacy Tab View (iOS < 26)
+
+    private var legacyTabView: some View {
+        ZStack(alignment: .bottom) {
+            NavigationStack(path: $navigationPath) {
+                Group {
+                    switch selectedTab {
+                    case 0: HomeView(navigationPath: $navigationPath)
+                    case 1: LibraryView(navigationPath: $navigationPath)
+                    default: HomeView(navigationPath: $navigationPath)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Theme.background)
+                .navigationBarHidden(true)
+                .navigationDestination(for: Artist.self) { artist in
+                    ArtistDetailView(artist: artist, navigationPath: $navigationPath)
+                }
+            }
+
+            VStack(spacing: 6) {
+                if audioPlayer.currentTrack != nil {
+                    MiniPlayerView(expansion: $playerExpansion)
+                        .opacity(playerExpansion > 0 ? 0 : 1)
+                        .allowsHitTesting(playerExpansion == 0)
+                }
+
+                HStack(spacing: 0) {
+                    TabBarButton(icon: "house.fill", label: "Home", isSelected: selectedTab == 0) { selectedTab = 0 }
+                    TabBarButton(icon: "books.vertical.fill", label: "Library", isSelected: selectedTab == 1) { selectedTab = 1 }
+                }
+                .padding(.top, 10)
+                .padding(.bottom, 8)
+                .padding(.horizontal, 8)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .padding(.horizontal, 40)
+            }
+            .padding(.bottom, 5)
+        }
         .ignoresSafeArea()
     }
 
