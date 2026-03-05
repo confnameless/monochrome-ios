@@ -80,8 +80,7 @@ struct MiniPlayerView: View {
                             swipeOffset = raw
                         }
                     case .vertical:
-                        let progress = -value.translation.height / UIScreen.main.bounds.height
-                        expansion = max(0, min(1, progress))
+                        break // Handled by global swipe gesture
                     case .undecided:
                         break
                     }
@@ -128,21 +127,10 @@ struct MiniPlayerView: View {
                             }
                         }
                     } else if lockedAxis == .vertical {
-                        let dy = value.translation.height
-                        let velocity = -(value.predictedEndTranslation.height - dy)
-                        let progress = -dy / UIScreen.main.bounds.height
-
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
-                            if progress > 0.25 || velocity > 600 {
-                                expansion = 1
-                            } else {
-                                expansion = 0
-                            }
-                        }
+                        // Handled by global swipe gesture
                     } else {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             swipeOffset = 0
-                            expansion = 0
                         }
                     }
                 }

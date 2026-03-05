@@ -17,8 +17,8 @@ struct MainTabView: View {
                 legacyTabView
             }
 
-            // Full-screen player overlay
-            if audioPlayer.currentTrack != nil && playerExpansion > 0 {
+            // Full-screen player overlay (always in hierarchy for smooth animation)
+            if audioPlayer.currentTrack != nil {
                 let effectiveExp = max(0, min(1,
                     playerExpansion - (dragOffset / fullScreenH)
                 ))
@@ -33,6 +33,11 @@ struct MainTabView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .background {
+            if audioPlayer.currentTrack != nil {
+                GlobalSwipeUpHandler(expansion: $playerExpansion)
+            }
+        }
     }
 
     // MARK: - iOS 26+ Native Liquid Glass TabView
@@ -155,6 +160,117 @@ struct TabBarButton: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Global Swipe-Up Gesture (UIKit window-level, bypasses all SwiftUI gesture blocking)
+
+private struct GlobalSwipeUpHandler: UIViewRepresentable {
+    @Binding var expansion: CGFloat
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(expansion: $expansion)
+    }
+
+    func makeUIView(context: Context) -> GestureInstallerView {
+        let view = GestureInstallerView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+        view.coordinator = context.coordinator
+        return view
+    }
+
+    func updateUIView(_ uiView: GestureInstallerView, context: Context) {
+        context.coordinator.expansionBinding = $expansion
+    }
+
+    static func dismantleUIView(_ uiView: GestureInstallerView, coordinator: Coordinator) {
+        coordinator.removeGesture()
+    }
+
+    class GestureInstallerView: UIView {
+        weak var coordinator: Coordinator?
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if let window = window {
+                coordinator?.installGesture(in: window)
+            } else {
+                coordinator?.removeGesture()
+            }
+        }
+    }
+
+    class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var expansionBinding: Binding<CGFloat>
+        private var panGesture: UIPanGestureRecognizer?
+
+        init(expansion: Binding<CGFloat>) {
+            self.expansionBinding = expansion
+        }
+
+        func installGesture(in window: UIWindow) {
+            guard panGesture == nil else { return }
+            let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+            pan.delegate = self
+            window.addGestureRecognizer(pan)
+            panGesture = pan
+        }
+
+        func removeGesture() {
+            if let pan = panGesture {
+                pan.view?.removeGestureRecognizer(pan)
+                panGesture = nil
+            }
+        }
+
+        @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
+            guard let window = gesture.view else { return }
+            let translation = gesture.translation(in: window)
+            let velocity = gesture.velocity(in: window)
+            let screenH = UIScreen.main.bounds.height
+
+            switch gesture.state {
+            case .changed:
+                let progress = -translation.y / screenH
+                expansionBinding.wrappedValue = max(0, min(1, progress))
+            case .ended, .cancelled:
+                let progress = -translation.y / screenH
+                let upVelocity = -velocity.y
+
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
+                    if progress > 0.15 || upVelocity > 500 {
+                        expansionBinding.wrappedValue = 1
+                    } else {
+                        expansionBinding.wrappedValue = 0
+                    }
+                }
+            default:
+                break
+            }
+        }
+
+        // MARK: UIGestureRecognizerDelegate
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            guard expansionBinding.wrappedValue == 0 else { return false }
+
+            let velocity = pan.velocity(in: pan.view)
+            let location = pan.location(in: pan.view)
+            let screenH = UIScreen.main.bounds.height
+
+            let isVertical = abs(velocity.y) > abs(velocity.x)
+            let isUpward = velocity.y < 0
+            // Only activate in mini player + tab bar area (~120pt from bottom)
+            let isInBottomArea = location.y > screenH - 120
+
+            return isVertical && isUpward && isInBottomArea
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            return true
+        }
     }
 }
 
