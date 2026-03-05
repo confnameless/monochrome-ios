@@ -34,6 +34,7 @@ class AudioPlayerService {
     private let currentTrackKey = "monochrome_current_track"
     private let playHistoryKey = "monochrome_play_history"
     private let savedTimestampKey = "monochrome_saved_timestamp"
+    private let savedDurationKey = "monochrome_saved_duration"
     private let queueKey = "monochrome_queued_tracks"
     private let shuffleKey = "monochrome_is_shuffled"
     private let originalQueueKey = "monochrome_original_queue"
@@ -138,6 +139,7 @@ class AudioPlayerService {
                     await MainActor.run {
                         self.duration = durationSeconds
                         self.updateNowPlayingInfo()
+                        self.saveState()
                     }
                 }
 
@@ -215,6 +217,7 @@ class AudioPlayerService {
                 await MainActor.run {
                     self.duration = durationSeconds
                     self.updateNowPlayingInfo()
+                    self.saveState()
                 }
             }
 
@@ -356,6 +359,7 @@ class AudioPlayerService {
                     await MainActor.run {
                         self.duration = durationSeconds
                         self.updateNowPlayingInfo()
+                        self.saveState()
                     }
                 }
 
@@ -371,12 +375,20 @@ class AudioPlayerService {
         }
     }
 
+    private var lastSaveTime: TimeInterval = 0
+
     private func addTimeObserver() {
         guard let customPlayer = player else { return }
 
         let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserverToken = customPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            self?.currentTime = time.seconds
+            guard let self else { return }
+            self.currentTime = time.seconds
+            // Save state every 5 seconds
+            if abs(self.currentTime - self.lastSaveTime) >= 5 {
+                self.lastSaveTime = self.currentTime
+                self.saveState()
+            }
         }
     }
 
@@ -415,8 +427,9 @@ class AudioPlayerService {
             UserDefaults.standard.removeObject(forKey: currentTrackKey)
         }
 
-        // Save current playback position
+        // Save current playback position and duration
         UserDefaults.standard.set(currentTime, forKey: savedTimestampKey)
+        UserDefaults.standard.set(duration, forKey: savedDurationKey)
 
         let historyToSave = Array(playHistory.suffix(20)) // Keep last 20
         if let data = try? JSONEncoder().encode(historyToSave) {
@@ -464,11 +477,15 @@ class AudioPlayerService {
             self.currentCoverUrl = MonochromeAPI().getImageUrl(id: track.album?.cover)
             self.isPlaying = false
 
-            // Restore saved timestamp for resume
+            // Restore saved timestamp and duration for resume
             let savedTime = UserDefaults.standard.double(forKey: savedTimestampKey)
             if savedTime > 0 {
                 self.restoredTimestamp = savedTime
                 self.currentTime = savedTime
+            }
+            let savedDuration = UserDefaults.standard.double(forKey: savedDurationKey)
+            if savedDuration > 0 {
+                self.duration = savedDuration
             }
         }
     }
