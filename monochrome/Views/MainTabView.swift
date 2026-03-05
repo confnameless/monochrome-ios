@@ -52,6 +52,9 @@ struct MainTabView: View {
                         .navigationDestination(for: Artist.self) { artist in
                             ArtistDetailView(artist: artist, navigationPath: $navigationPath)
                         }
+                        .navigationDestination(for: Album.self) { album in
+                            AlbumDetailView(album: album, navigationPath: $navigationPath)
+                        }
                 }
             }
 
@@ -61,6 +64,9 @@ struct MainTabView: View {
                         .navigationBarHidden(true)
                         .navigationDestination(for: Artist.self) { artist in
                             ArtistDetailView(artist: artist, navigationPath: $navigationPath)
+                        }
+                        .navigationDestination(for: Album.self) { album in
+                            AlbumDetailView(album: album, navigationPath: $navigationPath)
                         }
                 }
             }
@@ -91,6 +97,9 @@ struct MainTabView: View {
                 .navigationBarHidden(true)
                 .navigationDestination(for: Artist.self) { artist in
                     ArtistDetailView(artist: artist, navigationPath: $navigationPath)
+                }
+                .navigationDestination(for: Album.self) { album in
+                    AlbumDetailView(album: album, navigationPath: $navigationPath)
                 }
             }
 
