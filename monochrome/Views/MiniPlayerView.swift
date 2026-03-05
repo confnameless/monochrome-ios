@@ -18,7 +18,7 @@ struct MiniPlayerView: View {
                 let w = geo.size.width
                 ZStack {
                     // Previous track (slides in from left)
-                    if let prev = audioPlayer.playHistory.last {
+                    if let prev = audioPlayer.previousInSession.last {
                         miniTrackRow(title: prev.title, artist: prev.artist?.name ?? "Unknown Artist",
                                      coverUrl: MonochromeAPI().getImageUrl(id: prev.album?.cover))
                             .frame(width: w)
@@ -72,9 +72,9 @@ struct MiniPlayerView: View {
                     case .horizontal:
                         let raw = value.translation.width
                         // Block swipe if no track in that direction
-                        if raw > 0 && audioPlayer.playHistory.isEmpty {
+                        if raw > 0 && !audioPlayer.hasPreviousTrack {
                             swipeOffset = 0
-                        } else if raw < 0 && audioPlayer.queuedTracks.isEmpty {
+                        } else if raw < 0 && !audioPlayer.hasNextTrack {
                             swipeOffset = 0
                         } else {
                             swipeOffset = raw
@@ -97,8 +97,8 @@ struct MiniPlayerView: View {
                     if lockedAxis == .horizontal {
                         let dx = value.translation.width
                         let screenW = UIScreen.main.bounds.width
-                        let hasPrev = !audioPlayer.playHistory.isEmpty
-                        let hasNext = !audioPlayer.queuedTracks.isEmpty
+                        let hasPrev = audioPlayer.hasPreviousTrack
+                        let hasNext = audioPlayer.hasNextTrack
 
                         // Confirm if dragged past 40%
                         let goNext = dx < 0 && hasNext && abs(dx) > screenW * 0.4

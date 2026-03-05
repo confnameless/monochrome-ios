@@ -122,8 +122,9 @@ struct AlbumDetailView: View {
         LazyVStack(spacing: 0) {
             ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                 let queue = Array(tracks.dropFirst(index + 1))
+                let previous = Array(tracks.prefix(index))
                 TrackRow(
-                    track: track, queue: queue,
+                    track: track, queue: queue, previousTracks: previous,
                     showCover: false, showIndex: index + 1,
                     navigationPath: $navigationPath
                 )

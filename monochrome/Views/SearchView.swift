@@ -47,7 +47,8 @@ struct SearchView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(searchResults.enumerated()), id: \.element.id) { index, track in
                             let queue = Array(searchResults.dropFirst(index + 1))
-                            TrackRow(track: track, queue: queue, showCover: true, navigationPath: $navigationPath)
+                            let previous = Array(searchResults.prefix(index))
+                            TrackRow(track: track, queue: queue, previousTracks: previous, showCover: true, navigationPath: $navigationPath)
                         }
                     }
                     .padding(.bottom, 120)
@@ -94,6 +95,7 @@ struct SearchView: View {
 struct TrackRow: View {
     let track: Track
     let queue: [Track]
+    var previousTracks: [Track] = []
     var showCover: Bool = true
     var showIndex: Int? = nil
     @Binding var navigationPath: NavigationPath
@@ -106,7 +108,7 @@ struct TrackRow: View {
     }
 
     var body: some View {
-        Button(action: { audioPlayer.play(track: track, queue: queue) }) {
+        Button(action: { audioPlayer.play(track: track, queue: queue, previousTracks: previousTracks) }) {
             HStack(spacing: 12) {
                 // Index or cover
                 if let index = showIndex {

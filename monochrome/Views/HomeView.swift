@@ -56,7 +56,8 @@ struct HomeView: View {
         } else if !searchResults.isEmpty {
             ForEach(Array(searchResults.enumerated()), id: \.element.id) { index, track in
                 let queue = Array(searchResults.dropFirst(index + 1))
-                TrackRow(track: track, queue: queue, showCover: true, navigationPath: $navigationPath)
+                let previous = Array(searchResults.prefix(index))
+                TrackRow(track: track, queue: queue, previousTracks: previous, showCover: true, navigationPath: $navigationPath)
             }
             Color.clear.frame(height: 120)
         } else {
@@ -168,7 +169,8 @@ struct HomeView: View {
             LazyVStack(spacing: 0) {
                 ForEach(Array(libraryManager.favoriteTracks.prefix(5).enumerated()), id: \.element.id) { index, track in
                     let queue = Array(libraryManager.favoriteTracks.dropFirst(index + 1))
-                    TrackRow(track: track, queue: queue, showCover: true, navigationPath: $navigationPath)
+                    let previous = Array(libraryManager.favoriteTracks.prefix(index))
+                    TrackRow(track: track, queue: queue, previousTracks: previous, showCover: true, navigationPath: $navigationPath)
                 }
             }
         }

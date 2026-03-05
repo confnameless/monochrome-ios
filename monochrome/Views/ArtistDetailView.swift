@@ -179,8 +179,9 @@ struct ArtistDetailView: View {
 
             ForEach(Array(displayed.enumerated()), id: \.element.id) { index, track in
                 let queue = Array(tracks.dropFirst(index + 1))
+                let previous = Array(tracks.prefix(index))
                 TrackRow(
-                    track: track, queue: queue,
+                    track: track, queue: queue, previousTracks: previous,
                     showCover: true, showIndex: index + 1,
                     navigationPath: $navigationPath
                 )

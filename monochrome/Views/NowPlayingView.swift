@@ -266,6 +266,7 @@ struct NowPlayingView: View {
                     .font(.system(size: 28))
                     .foregroundColor(audioPlayer.hasPreviousTrack ? .white : .white.opacity(0.3))
             }
+            .disabled(!audioPlayer.hasPreviousTrack)
 
             Spacer()
 
@@ -286,6 +287,7 @@ struct NowPlayingView: View {
                     .font(.system(size: 28))
                     .foregroundColor(audioPlayer.hasNextTrack ? .white : .white.opacity(0.3))
             }
+            .disabled(!audioPlayer.hasNextTrack)
 
             Spacer()
         }

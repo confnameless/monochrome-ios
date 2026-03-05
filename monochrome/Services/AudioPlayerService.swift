@@ -26,9 +26,16 @@ class AudioPlayerService {
     var playHistory: [Track] = []
     var isShuffled: Bool = false
     private var originalQueue: [Track] = []
+    var queueSessionHistoryStart: Int = 0
+    private let restartThreshold: TimeInterval = 3
 
-    var hasPreviousTrack: Bool { !playHistory.isEmpty }
+    var hasPreviousTrack: Bool { !previousInSession.isEmpty || currentTime >= restartThreshold }
     var hasNextTrack: Bool { !queuedTracks.isEmpty }
+
+    var previousInSession: [Track] {
+        guard playHistory.count > queueSessionHistoryStart else { return [] }
+        return Array(playHistory[queueSessionHistoryStart...])
+    }
 
     // Persistence keys
     private let currentTrackKey = "monochrome_current_track"
@@ -38,6 +45,7 @@ class AudioPlayerService {
     private let queueKey = "monochrome_queued_tracks"
     private let shuffleKey = "monochrome_is_shuffled"
     private let originalQueueKey = "monochrome_original_queue"
+    private let queueSessionHistoryStartKey = "monochrome_queue_session_history_start"
     private var restoredTimestamp: TimeInterval = 0
 
     init() {
@@ -85,7 +93,7 @@ class AudioPlayerService {
         saveState()
     }
 
-    func play(track: Track, queue: [Track] = []) {
+    func play(track: Track, queue: [Track] = [], previousTracks: [Track] = []) {
         // Clean up previous observer if any
         removeTimeObserver()
 
@@ -93,6 +101,12 @@ class AudioPlayerService {
         if let current = currentTrack {
             playHistory.append(current)
         }
+
+        // Mark where the current session starts in playHistory
+        queueSessionHistoryStart = playHistory.count
+
+        // Add previous tracks from the queue context to history
+        playHistory.append(contentsOf: previousTracks)
 
         self.queuedTracks = queue
         self.isShuffled = false
@@ -238,6 +252,7 @@ class AudioPlayerService {
 
         let targetTime = CMTime(seconds: time, preferredTimescale: 1000)
         customPlayer.seek(to: targetTime) { [weak self] _ in
+            self?.currentTime = time
             self?.updateNowPlayingInfo()
         }
     }
@@ -297,19 +312,21 @@ class AudioPlayerService {
 
         let wasShuffled = isShuffled
         let savedOriginal = originalQueue
+        let savedSessionStart = queueSessionHistoryStart
         play(track: next, queue: queuedTracks)
         isShuffled = wasShuffled
         originalQueue = savedOriginal
+        queueSessionHistoryStart = savedSessionStart
     }
 
     func previousTrack() {
         // If more than 3 seconds in, restart current track
-        if currentTime > 3 {
+        if currentTime >= restartThreshold {
             seek(to: 0)
             return
         }
 
-        guard !playHistory.isEmpty else {
+        guard playHistory.count > queueSessionHistoryStart else {
             seek(to: 0)
             return
         }
@@ -432,9 +449,11 @@ class AudioPlayerService {
         UserDefaults.standard.set(duration, forKey: savedDurationKey)
 
         let historyToSave = Array(playHistory.suffix(20)) // Keep last 20
+        let historyDropCount = playHistory.count - historyToSave.count
         if let data = try? JSONEncoder().encode(historyToSave) {
             UserDefaults.standard.set(data, forKey: playHistoryKey)
         }
+        UserDefaults.standard.set(max(0, queueSessionHistoryStart - historyDropCount), forKey: queueSessionHistoryStartKey)
 
         // Save queue and shuffle state
         if let data = try? JSONEncoder().encode(queuedTracks) {
@@ -454,6 +473,10 @@ class AudioPlayerService {
            let tracks = try? JSONDecoder().decode([Track].self, from: data) {
             self.playHistory = tracks
         }
+        self.queueSessionHistoryStart = min(
+            UserDefaults.standard.integer(forKey: queueSessionHistoryStartKey),
+            self.playHistory.count
+        )
 
         // Restore queue and shuffle state
         if let data = UserDefaults.standard.data(forKey: queueKey),

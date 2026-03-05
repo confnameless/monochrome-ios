@@ -64,7 +64,8 @@ struct LibraryView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(sortedTracks.enumerated()), id: \.element.id) { index, track in
                             let queue = Array(sortedTracks.dropFirst(index + 1))
-                            TrackRow(track: track, queue: queue, showCover: true, navigationPath: $navigationPath)
+                            let previous = Array(sortedTracks.prefix(index))
+                            TrackRow(track: track, queue: queue, previousTracks: previous, showCover: true, navigationPath: $navigationPath)
                         }
                     }
                     .padding(.bottom, 120)

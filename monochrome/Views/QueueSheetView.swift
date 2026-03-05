@@ -3,95 +3,168 @@ import SwiftUI
 struct QueueSheetView: View {
     @Environment(AudioPlayerService.self) private var audioPlayer
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab = 1 // 0 = Previous, 1 = Queue
     @State private var editMode: EditMode = .inactive
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Theme.background.ignoresSafeArea()
-
-                List {
-                    // Now Playing
-                    if let current = audioPlayer.currentTrack {
-                        Section {
-                            trackRow(
-                                title: current.title,
-                                artist: current.artist?.name ?? "Unknown Artist",
-                                coverUrl: MonochromeAPI().getImageUrl(id: current.album?.cover, size: 80),
-                                duration: current.duration,
-                                isPlaying: true
-                            )
-                            .listRowBackground(Color.white.opacity(0.05))
-                        } header: {
-                            Text("Now Playing")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.6))
-                                .textCase(nil)
-                        }
-                    }
-
-                    // Next Up
-                    if !audioPlayer.queuedTracks.isEmpty {
-                        Section {
-                            ForEach(Array(audioPlayer.queuedTracks.enumerated()), id: \.element.id) { index, track in
-                                trackRow(
-                                    title: track.title,
-                                    artist: track.artist?.name ?? "Unknown Artist",
-                                    coverUrl: MonochromeAPI().getImageUrl(id: track.album?.cover, size: 80),
-                                    duration: track.duration,
-                                    isPlaying: false
-                                )
-                                .listRowBackground(Theme.background)
-                            }
-                            .onDelete { offsets in
-                                for index in offsets.sorted().reversed() {
-                                    audioPlayer.removeFromQueue(at: index)
-                                }
-                            }
-                            .onMove { source, destination in
-                                audioPlayer.moveInQueue(from: source, to: destination)
-                            }
-                        } header: {
-                            HStack {
-                                Text("Next Up")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.6))
-                                    .textCase(nil)
-                                Spacer()
-                                Text("\(audioPlayer.queuedTracks.count) track\(audioPlayer.queuedTracks.count > 1 ? "s" : "")")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.white.opacity(0.3))
-                            }
-                        }
-                    }
+            VStack(spacing: 0) {
+                // Tab bar
+                HStack(spacing: 0) {
+                    tabButton("Previous", tab: 0)
+                    tabButton("Queue", tab: 1)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .environment(\.editMode, $editMode)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+
+                // Swipeable pages
+                TabView(selection: $selectedTab) {
+                    previousPage.tag(0)
+                    queuePage.tag(1)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
+            .background(Theme.background)
             .navigationTitle("Queue")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(editMode == .active ? "Done" : "Edit") {
-                        withAnimation {
-                            editMode = editMode == .active ? .inactive : .active
-                        }
-                    }
-                    .foregroundColor(.white.opacity(0.8))
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
             .toolbarBackground(Theme.background, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Theme.background)
+        .onChange(of: selectedTab) {
+            if selectedTab != 1 && editMode == .active {
+                withAnimation { editMode = .inactive }
+            }
+        }
     }
+
+    private func tabButton(_ title: String, tab: Int) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.25)) { selectedTab = tab }
+        } label: {
+            VStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(selectedTab == tab ? .white : .white.opacity(0.35))
+                Rectangle()
+                    .fill(selectedTab == tab ? .white : .clear)
+                    .frame(height: 2)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Previous Page
+
+    private var previousPage: some View {
+        Group {
+            if audioPlayer.previousInSession.isEmpty {
+                VStack {
+                    Spacer()
+                    Text("No previous tracks")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.3))
+                    Spacer()
+                }
+            } else {
+                List {
+                    ForEach(audioPlayer.previousInSession.reversed()) { track in
+                        trackRow(
+                            title: track.title,
+                            artist: track.artist?.name ?? "Unknown Artist",
+                            coverUrl: MonochromeAPI().getImageUrl(id: track.album?.cover, size: 80),
+                            duration: track.duration,
+                            isPlaying: false
+                        )
+                        .listRowBackground(Theme.background)
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+        }
+    }
+
+    // MARK: - Queue Page
+
+    private var queuePage: some View {
+        List {
+            // Now Playing
+            if let current = audioPlayer.currentTrack {
+                Section {
+                    trackRow(
+                        title: current.title,
+                        artist: current.artist?.name ?? "Unknown Artist",
+                        coverUrl: MonochromeAPI().getImageUrl(id: current.album?.cover, size: 80),
+                        duration: current.duration,
+                        isPlaying: true
+                    )
+                    .listRowBackground(Color.white.opacity(0.05))
+                } header: {
+                    Text("Now Playing")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.6))
+                        .textCase(nil)
+                }
+            }
+
+            // Next Up
+            if !audioPlayer.queuedTracks.isEmpty {
+                Section {
+                    ForEach(Array(audioPlayer.queuedTracks.enumerated()), id: \.element.id) { index, track in
+                        trackRow(
+                            title: track.title,
+                            artist: track.artist?.name ?? "Unknown Artist",
+                            coverUrl: MonochromeAPI().getImageUrl(id: track.album?.cover, size: 80),
+                            duration: track.duration,
+                            isPlaying: false
+                        )
+                        .listRowBackground(Theme.background)
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                audioPlayer.removeFromQueue(at: index)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                        }
+                    }
+                    .onDelete { offsets in
+                        for index in offsets.sorted().reversed() {
+                            audioPlayer.removeFromQueue(at: index)
+                        }
+                    }
+                    .onMove { source, destination in
+                        audioPlayer.moveInQueue(from: source, to: destination)
+                    }
+                } header: {
+                    HStack {
+                        Text("Next Up")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.6))
+                            .textCase(nil)
+                        Spacer()
+                        Text("\(audioPlayer.queuedTracks.count) track\(audioPlayer.queuedTracks.count > 1 ? "s" : "")")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.3))
+                        Button {
+                            withAnimation { editMode = editMode == .active ? .inactive : .active }
+                        } label: {
+                            Image(systemName: editMode == .active ? "checkmark" : "pencil")
+                                .font(.system(size: 13))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                    }
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .environment(\.editMode, $editMode)
+    }
+
+    // MARK: - Row
 
     private func trackRow(title: String, artist: String, coverUrl: URL?, duration: Int, isPlaying: Bool) -> some View {
         HStack(spacing: 12) {
@@ -127,8 +200,6 @@ struct QueueSheetView: View {
     }
 
     private func formatDuration(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%d:%02d", m, s)
+        String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 }
