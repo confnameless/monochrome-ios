@@ -58,7 +58,21 @@ struct MainTabView: View {
                 }
             }
 
-            Tab("Library", systemImage: "books.vertical.fill", value: 1) {
+            Tab("Search", systemImage: "magnifyingglass", value: 1) {
+                NavigationStack(path: $navigationPath) {
+                    SearchView(navigationPath: $navigationPath)
+                        .navigationBarHidden(true)
+                        .navigationDestination(for: Artist.self) { artist in
+                            ArtistDetailView(artist: artist, navigationPath: $navigationPath)
+                        }
+                        .navigationDestination(for: Album.self) { album in
+                            AlbumDetailView(album: album, navigationPath: $navigationPath)
+                        }
+                }
+                .ignoresSafeArea(.keyboard)
+            }
+
+            Tab("Library", systemImage: "books.vertical.fill", value: 2) {
                 NavigationStack(path: $navigationPath) {
                     LibraryView(navigationPath: $navigationPath)
                         .navigationBarHidden(true)
@@ -78,6 +92,7 @@ struct MainTabView: View {
                     .allowsHitTesting(playerExpansion == 0)
             }
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
     // MARK: - Legacy Tab View (iOS < 26)
@@ -88,7 +103,8 @@ struct MainTabView: View {
                 Group {
                     switch selectedTab {
                     case 0: HomeView(navigationPath: $navigationPath)
-                    case 1: LibraryView(navigationPath: $navigationPath)
+                    case 1: SearchView(navigationPath: $navigationPath)
+                    case 2: LibraryView(navigationPath: $navigationPath)
                     default: HomeView(navigationPath: $navigationPath)
                     }
                 }
@@ -102,6 +118,7 @@ struct MainTabView: View {
                     AlbumDetailView(album: album, navigationPath: $navigationPath)
                 }
             }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
 
             VStack(spacing: 6) {
                 if audioPlayer.currentTrack != nil {
@@ -112,7 +129,8 @@ struct MainTabView: View {
 
                 HStack(spacing: 0) {
                     TabBarButton(icon: "house.fill", label: "Home", isSelected: selectedTab == 0) { selectedTab = 0 }
-                    TabBarButton(icon: "books.vertical.fill", label: "Library", isSelected: selectedTab == 1) { selectedTab = 1 }
+                    TabBarButton(icon: "magnifyingglass", label: "Search", isSelected: selectedTab == 1) { selectedTab = 1 }
+                    TabBarButton(icon: "books.vertical.fill", label: "Library", isSelected: selectedTab == 2) { selectedTab = 2 }
                 }
                 .padding(.top, 10)
                 .padding(.bottom, 8)
@@ -122,6 +140,7 @@ struct MainTabView: View {
                 .padding(.horizontal, 40)
             }
             .padding(.bottom, 5)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
         }
         .ignoresSafeArea()
     }

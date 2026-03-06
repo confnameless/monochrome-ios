@@ -3,95 +3,114 @@ import SwiftUI
 struct SearchView: View {
     @Binding var navigationPath: NavigationPath
     @Environment(AudioPlayerService.self) private var audioPlayer
-    @Environment(\.dismiss) private var dismiss
 
     @State private var searchText = ""
     @State private var searchResults: [Track] = []
     @State private var isSearching = false
     @State private var hasSearched = false
     @FocusState private var isFocused: Bool
+    @State private var keyboardHeight: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Search bar
-            HStack(spacing: 12) {
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 16))
-                        .foregroundColor(Theme.mutedForeground)
-
-                    TextField("What do you want to listen to?", text: $searchText)
-                        .focused($isFocused)
-                        .font(.system(size: 16))
-                        .foregroundColor(Theme.foreground)
-                        .autocorrectionDisabled()
-                        .onSubmit { performSearch() }
-
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = ""; searchResults = []; hasSearched = false }) {
-                            Image(systemName: "xmark.circle.fill")
+        ZStack(alignment: .top) {
+            // Main content (Scrolled underneath the floating bar)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    if isSearching {
+                        ProgressView().tint(Theme.mutedForeground)
+                            .padding(.top, 100)
+                    } else if !searchResults.isEmpty {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(searchResults.enumerated()), id: \.element.id) { index, track in
+                                let queue = Array(searchResults.dropFirst(index + 1))
+                                let previous = Array(searchResults.prefix(index))
+                                TrackRow(track: track, queue: queue, previousTracks: previous, showCover: true, navigationPath: $navigationPath)
+                            }
+                        }
+                        .padding(.top, 10)
+                        
+                        // Spacer to ensure last items can be scrolled past the miniplayer and tab bar
+                        Color.clear.frame(height: 140)
+                    } else if hasSearched {
+                        VStack(spacing: 10) {
+                            Text("No results for")
+                                .font(.system(size: 16))
+                                .foregroundColor(Theme.mutedForeground)
+                            Text("\"\(searchText)\"")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(Theme.foreground)
+                        }
+                        .padding(.top, 100)
+                    } else {
+                        VStack(spacing: 10) {
+                            Text("Search for tracks")
                                 .font(.system(size: 16))
                                 .foregroundColor(Theme.mutedForeground)
                         }
+                        .padding(.top, 100)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Theme.secondary)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                Button("Cancel") {
-                    dismiss()
-                }
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(Theme.foreground)
+                .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height - 200, alignment: .top)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-
-            if isSearching {
-                Spacer()
-                ProgressView().tint(Theme.mutedForeground)
-                Spacer()
-            } else if !searchResults.isEmpty {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(searchResults.enumerated()), id: \.element.id) { index, track in
-                            let queue = Array(searchResults.dropFirst(index + 1))
-                            let previous = Array(searchResults.prefix(index))
-                            TrackRow(track: track, queue: queue, previousTracks: previous, showCover: true, navigationPath: $navigationPath)
-                        }
-                    }
-                    .padding(.bottom, 120)
+            // Add padding inside the scrollview so content starts below the floating search bar
+            .safeAreaPadding(.top, 70) 
+            
+            // Absolutely floating search bar resting on top of the ZStack
+            searchBar
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.background)
+        // Counter-act the OS's forced upward push by pushing the view down by the exact keyboard height
+        .offset(y: keyboardHeight)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
+            if let keyboardFrame: NSValue = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue {
+                let keyboardRectangle = keyboardFrame.cgRectValue
+                // Animate to match the keyboard's animation (middle ground scale factor)
+                withAnimation(.easeOut(duration: 0.25)) {
+                    self.keyboardHeight = keyboardRectangle.height * 0.38
                 }
-            } else if hasSearched {
-                Spacer()
-                VStack(spacing: 10) {
-                    Text("No results for")
-                        .font(.system(size: 16))
-                        .foregroundColor(Theme.mutedForeground)
-                    Text("\"\(searchText)\"")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(Theme.foreground)
-                }
-                Spacer()
-            } else {
-                Spacer()
-                VStack(spacing: 10) {
-                    Text("Search for tracks")
-                        .font(.system(size: 16))
-                        .foregroundColor(Theme.mutedForeground)
-                }
-                Spacer()
             }
         }
-        .background(Theme.background)
-        .onAppear {
-            // Auto-focus the search bar when the view appears as a fullScreenCover
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                isFocused = true
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.25)) {
+                self.keyboardHeight = 0
             }
+        }
+        .ignoresSafeArea(.all, edges: .bottom)
+        .ignoresSafeArea(.keyboard)
+    }
+
+    // Search bar — floating at the top, just the bar itself has a glass effect
+    private var searchBar: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 16))
+                    .foregroundColor(Theme.mutedForeground)
+
+                TextField("What do you want to listen to?", text: $searchText)
+                    .focused($isFocused)
+                    .font(.system(size: 16))
+                    .foregroundColor(Theme.foreground)
+                    .autocorrectionDisabled()
+                    .onSubmit { performSearch() }
+
+                if !searchText.isEmpty {
+                    Button(action: { searchText = ""; searchResults = []; hasSearched = false }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(Theme.mutedForeground)
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial) // Just the bar has the glass effect
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4) // Shadow to emphasize floating
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 12)
         }
     }
 

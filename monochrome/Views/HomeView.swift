@@ -5,8 +5,6 @@ struct HomeView: View {
     @Environment(AudioPlayerService.self) private var audioPlayer
     @Environment(LibraryManager.self) private var libraryManager
 
-    @State private var showSearch = false
-
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
         if hour < 12 { return "Good morning" }
@@ -16,48 +14,9 @@ struct HomeView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                Section {
-                    homeContent
-                } header: {
-                    searchBarButton
-                        .background(Theme.background)
-                }
-            }
+            homeContent
         }
         .background(Theme.background)
-        .fullScreenCover(isPresented: $showSearch) {
-            NavigationStack {
-                SearchView(navigationPath: $navigationPath)
-            }
-        }
-    }
-
-    // MARK: - Search Bar Button
-    
-    // A fake search bar that acts as a button to launch the real search screen
-    private var searchBarButton: some View {
-        Button(action: { showSearch = true }) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 16))
-                    .foregroundColor(Theme.mutedForeground)
-
-                Text("What do you want to listen to?")
-                    .font(.system(size: 16))
-                    .foregroundColor(Theme.mutedForeground)
-
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Home Content
