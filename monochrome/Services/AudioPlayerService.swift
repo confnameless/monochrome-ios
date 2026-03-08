@@ -27,6 +27,7 @@ class AudioPlayerService {
     var isShuffled: Bool = false
     private var originalQueue: [Track] = []
     var queueSessionHistoryStart: Int = 0
+
     private let restartThreshold: TimeInterval = 3
 
     var hasPreviousTrack: Bool { !previousInSession.isEmpty || currentTime >= restartThreshold }
@@ -108,6 +109,7 @@ class AudioPlayerService {
         }
         saveState()
     }
+
 
     func play(track: Track, queue: [Track] = [], previousTracks: [Track] = []) {
         // Clean up previous observer if any

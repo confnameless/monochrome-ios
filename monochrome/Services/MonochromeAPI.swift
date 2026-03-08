@@ -161,7 +161,7 @@ class MonochromeAPI {
         if topTracks.isEmpty && albums.isEmpty && eps.isEmpty {
             let token = "txNoH4kkV41MfH25"
             
-            // Fallback: Top Tracks
+            // Fallback 1: Top Tracks (Direct Tidal)
             if let tUrl = URL(string: "https://api.tidal.com/v1/artists/\(id)/toptracks?countryCode=FR") {
                 var req = URLRequest(url: tUrl)
                 req.setValue(token, forHTTPHeaderField: "X-Tidal-Token")
@@ -186,7 +186,7 @@ class MonochromeAPI {
                 }
             }
             
-            // Fallback: Albums
+            // Fallback 2: Albums (Direct Tidal)
             if let aUrl = URL(string: "https://api.tidal.com/v1/artists/\(id)/albums?countryCode=FR") {
                 var req = URLRequest(url: aUrl)
                 req.setValue(token, forHTTPHeaderField: "X-Tidal-Token")
@@ -203,6 +203,29 @@ class MonochromeAPI {
                             let t = a.type?.uppercased() ?? ""
                             if t == "EP" || t == "SINGLE" { eps.append(a) }
                             else { albums.append(a) }
+                        }
+                    }
+                }
+            }
+
+            // Fallback 3: Search (Monochrome search if still empty - good for contributor/variation artists)
+            if topTracks.isEmpty && albums.isEmpty && eps.isEmpty {
+                let encodedName = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                if let sUrl = URL(string: "\(baseURL)/search/?s=\(encodedName)") {
+                    if let (data, resp) = try? await urlSession.data(for: request(for: sUrl)),
+                       (resp as? HTTPURLResponse)?.statusCode == 200,
+                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let items = (json["data"] as? [String: Any])?["items"] as? [[String: Any]] {
+                        
+                        // Extract tracks where the artist name matches closely
+                        let filtered = items.filter { item in
+                            guard let tracksArtist = (item["artist"] as? [String: Any])?["name"] as? String else { return false }
+                            return tracksArtist.localizedCaseInsensitiveContains(name)
+                        }
+
+                        if let tracksData = try? JSONSerialization.data(withJSONObject: filtered),
+                           let decoded = try? JSONDecoder().decode([Track].self, from: tracksData) {
+                            topTracks = Array(decoded.prefix(15))
                         }
                     }
                 }

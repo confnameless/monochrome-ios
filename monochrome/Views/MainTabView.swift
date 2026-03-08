@@ -31,6 +31,7 @@ struct MainTabView: View {
                     .transition(.identity)
                     .ignoresSafeArea()
             }
+            
         }
         .preferredColorScheme(.dark)
         .background {

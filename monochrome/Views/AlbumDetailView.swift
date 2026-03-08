@@ -136,22 +136,6 @@ struct AlbumDetailView: View {
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
-            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                Button {
-                    audioPlayer.playNext(track: track)
-                } label: {
-                    Label("Play Next", systemImage: "text.insert")
-                }
-                .tint(.blue)
-            }
-            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                Button {
-                    audioPlayer.addToQueue(track: track)
-                } label: {
-                    Label("Add to Queue", systemImage: "text.append")
-                }
-                .tint(.green)
-            }
         }
     }
 
