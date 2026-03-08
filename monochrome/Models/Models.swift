@@ -22,6 +22,7 @@ struct Artist: Identifiable, Codable, Hashable {
     let id: Int
     let name: String
     let picture: String?
+    let popularity: Int?
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: Artist, rhs: Artist) -> Bool { lhs.id == rhs.id }

@@ -48,7 +48,18 @@ class MonochromeAPI {
            let items = artistsDict["items"] as? [[String: Any]],
            let arrData = try? JSONSerialization.data(withJSONObject: items),
            let decoded = try? JSONDecoder().decode([Artist].self, from: arrData) {
-            artists = decoded
+            // Filter out entries with no picture, then deduplicate by name (keep highest popularity)
+            let filtered = decoded.filter { $0.picture != nil }
+            var bestByName: [String: Artist] = [:]
+            for a in filtered {
+                let key = a.name.lowercased()
+                if let existing = bestByName[key] {
+                    if (a.popularity ?? 0) > (existing.popularity ?? 0) { bestByName[key] = a }
+                } else {
+                    bestByName[key] = a
+                }
+            }
+            artists = filtered.filter { bestByName[$0.name.lowercased()]?.id == $0.id }
         }
 
         let (alData, alResp) = try await albumsTask
@@ -60,7 +71,8 @@ class MonochromeAPI {
            let items = albumsDict["items"] as? [[String: Any]],
            let arrData = try? JSONSerialization.data(withJSONObject: items),
            let decoded = try? JSONDecoder().decode([Album].self, from: arrData) {
-            albums = decoded
+            // Filter out albums with no cover art
+            albums = decoded.filter { $0.cover != nil }
         }
 
         return (artists, albums, tracks)

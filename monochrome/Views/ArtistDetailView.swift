@@ -337,7 +337,7 @@ struct ArtistDetailView: View {
                         showFullBio = false
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             if type == "artist", let intId = Int(id) {
-                                navigationPath.append(Artist(id: intId, name: "", picture: nil))
+                                navigationPath.append(Artist(id: intId, name: "", picture: nil, popularity: nil))
                             } else if type == "album", let intId = Int(id) {
                                 navigationPath.append(Album(id: intId, title: "", cover: nil, numberOfTracks: nil, releaseDate: nil, artist: nil, type: nil))
                             } else if type == "track", let intId = Int(id) {
