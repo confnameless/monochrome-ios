@@ -277,63 +277,66 @@ struct TrackRow: View {
     }
 
     var body: some View {
-        Button(action: { audioPlayer.play(track: track, queue: queue, previousTracks: previousTracks) }) {
-            HStack(spacing: 12) {
-                // Index or cover
-                if let index = showIndex {
-                    Text("\(index)")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(isCurrentTrack ? Theme.highlight : Theme.mutedForeground)
-                        .frame(width: 28, alignment: .center)
-                } else if showCover {
-                    AsyncImage(url: MonochromeAPI().getImageUrl(id: track.album?.cover)) { phase in
-                        if let image = phase.image {
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        } else {
-                            RoundedRectangle(cornerRadius: 4).fill(Theme.card)
-                        }
+        HStack(spacing: 12) {
+            // Index or cover
+            if let index = showIndex {
+                Text("\(index)")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(isCurrentTrack ? Theme.highlight : Theme.mutedForeground)
+                    .frame(width: 28, alignment: .center)
+            } else if showCover {
+                AsyncImage(url: MonochromeAPI().getImageUrl(id: track.album?.cover)) { phase in
+                    if let image = phase.image {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        RoundedRectangle(cornerRadius: 4).fill(Theme.card)
                     }
-                    .frame(width: 44, height: 44)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
-
-                // Track info
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(track.title)
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundColor(isCurrentTrack ? Theme.highlight : Theme.foreground)
-                        .lineLimit(1)
-
-                    HStack(spacing: 4) {
-                        if isCurrentTrack && audioPlayer.isPlaying {
-                            Image(systemName: "waveform")
-                                .font(.system(size: 10))
-                                .foregroundColor(Theme.highlight)
-                                .symbolEffect(.variableColor.iterative, isActive: true)
-                        }
-                        Text(track.artist?.name ?? "Unknown")
-                    }
-                    .font(.system(size: 13))
-                    .foregroundColor(Theme.mutedForeground)
-                    .lineLimit(1)
-                }
-
-                Spacer()
-
-                // Context menu button
-                Button(action: { showOptions = true }) {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 16))
-                        .foregroundColor(Theme.mutedForeground)
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
+
+            // Track info
+            VStack(alignment: .leading, spacing: 3) {
+                Text(track.title)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(isCurrentTrack ? Theme.highlight : Theme.foreground)
+                    .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    if isCurrentTrack && audioPlayer.isPlaying {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 10))
+                            .foregroundColor(Theme.highlight)
+                            .symbolEffect(.variableColor.iterative, isActive: true)
+                    }
+                    Text(track.artist?.name ?? "Unknown")
+                }
+                .font(.system(size: 13))
+                .foregroundColor(Theme.mutedForeground)
+                .lineLimit(1)
+            }
+
+            Spacer()
+
+            // Context menu button
+            Button(action: { showOptions = true }) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16))
+                    .foregroundColor(Theme.mutedForeground)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            audioPlayer.play(track: track, queue: queue, previousTracks: previousTracks)
+        }
+        .onLongPressGesture {
+            showOptions = true
+        }
         .sheet(isPresented: $showOptions) {
             TrackOptionsSheet(
                 track: track,
@@ -403,6 +406,12 @@ struct TrackOptionsSheet: View {
                         libraryManager.toggleFavorite(track: track)
                     }
 
+                    // Play next
+                    OptionRow(icon: "text.line.first.and.arrowtriangle.forward", label: "Play next") {
+                        audioPlayer.playNext(track: track)
+                        isPresented = false
+                    }
+
                     // Add to queue
                     OptionRow(icon: "text.line.last.and.arrowtriangle.forward", label: "Add to queue") {
                         audioPlayer.queuedTracks.append(track)
@@ -415,6 +424,16 @@ struct TrackOptionsSheet: View {
                             isPresented = false
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 navigationPath.append(artist)
+                            }
+                        }
+                    }
+
+                    // Go to album
+                    if let album = track.album {
+                        OptionRow(icon: "square.stack", label: "Go to album") {
+                            isPresented = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                navigationPath.append(album)
                             }
                         }
                     }
