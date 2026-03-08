@@ -85,6 +85,19 @@ struct MainTabView: View {
                         }
                 }
             }
+
+            Tab("Profile", systemImage: "person.fill", value: 3) {
+                NavigationStack(path: $navigationPath) {
+                    ProfileView(navigationPath: $navigationPath)
+                        .navigationBarHidden(true)
+                        .navigationDestination(for: Artist.self) { artist in
+                            ArtistDetailView(artist: artist, navigationPath: $navigationPath)
+                        }
+                        .navigationDestination(for: Album.self) { album in
+                            AlbumDetailView(album: album, navigationPath: $navigationPath)
+                        }
+                }
+            }
         }
         .tabViewBottomAccessory {
             if audioPlayer.currentTrack != nil {
@@ -106,6 +119,7 @@ struct MainTabView: View {
                     case 0: HomeView(navigationPath: $navigationPath)
                     case 1: SearchView(navigationPath: $navigationPath)
                     case 2: LibraryView(navigationPath: $navigationPath)
+                    case 3: ProfileView(navigationPath: $navigationPath)
                     default: HomeView(navigationPath: $navigationPath)
                     }
                 }
@@ -132,13 +146,14 @@ struct MainTabView: View {
                     TabBarButton(icon: "house.fill", label: "Home", isSelected: selectedTab == 0) { selectedTab = 0 }
                     TabBarButton(icon: "magnifyingglass", label: "Search", isSelected: selectedTab == 1) { selectedTab = 1 }
                     TabBarButton(icon: "books.vertical.fill", label: "Library", isSelected: selectedTab == 2) { selectedTab = 2 }
+                    TabBarButton(icon: "person.fill", label: "Profile", isSelected: selectedTab == 3) { selectedTab = 3 }
                 }
                 .padding(.top, 10)
                 .padding(.bottom, 8)
                 .padding(.horizontal, 8)
                 .background(.ultraThinMaterial)
                 .clipShape(Capsule())
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 24)
             }
             .padding(.bottom, 5)
             .ignoresSafeArea(.keyboard, edges: .bottom)
