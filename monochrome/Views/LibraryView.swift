@@ -60,16 +60,25 @@ struct LibraryView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
 
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(sortedTracks.enumerated()), id: \.element.id) { index, track in
-                            let queue = Array(sortedTracks.dropFirst(index + 1))
-                            let previous = Array(sortedTracks.prefix(index))
-                            TrackRow(track: track, queue: queue, previousTracks: previous, showCover: true, navigationPath: $navigationPath)
-                        }
+                List {
+                    ForEach(Array(sortedTracks.enumerated()), id: \.element.id) { index, track in
+                        let queue = Array(sortedTracks.dropFirst(index + 1))
+                        let previous = Array(sortedTracks.prefix(index))
+                        TrackRow(track: track, queue: queue, previousTracks: previous, showCover: true, navigationPath: $navigationPath)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
                     }
-                    .padding(.bottom, 120)
+                    
+                    // Spacer for miniplayer
+                    Color.clear.frame(height: 120)
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Theme.background)
+                .environment(\.defaultMinListRowHeight, 0)
             }
         }
         .background(Theme.background)

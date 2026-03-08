@@ -13,24 +13,33 @@ struct HomeView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
+        List {
             homeContent
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .background(Theme.background)
+        .environment(\.defaultMinListRowHeight, 0)
     }
 
     // MARK: - Home Content
 
     private var homeContent: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        Group {
             Text(greeting)
                 .font(.system(size: 26, weight: .bold))
                 .foregroundColor(Theme.foreground)
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 0, trailing: 0))
+                .listRowBackground(Color.clear)
 
             if !audioPlayer.playHistory.isEmpty || audioPlayer.currentTrack != nil {
                 recentlyPlayed
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 24, leading: 0, bottom: 0, trailing: 0))
+                    .listRowBackground(Color.clear)
             }
 
             if !libraryManager.favoriteTracks.isEmpty {
@@ -48,9 +57,13 @@ struct HomeView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 80)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             }
 
             Color.clear.frame(height: 100)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
         }
     }
 
@@ -94,26 +107,32 @@ struct HomeView: View {
     // MARK: - Favorites
 
     private var favoritesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Your favorites")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(Theme.foreground)
-
-                Spacer()
-
-                Text("\(libraryManager.favoriteTracks.count) track\(libraryManager.favoriteTracks.count > 1 ? "s" : "")")
-                    .font(.system(size: 13))
-                    .foregroundColor(Theme.mutedForeground)
-            }
-            .padding(.horizontal, 16)
-
-            LazyVStack(spacing: 0) {
+        Group {
+            Section {
                 ForEach(Array(libraryManager.favoriteTracks.prefix(5).enumerated()), id: \.element.id) { index, track in
                     let queue = Array(libraryManager.favoriteTracks.dropFirst(index + 1))
                     let previous = Array(libraryManager.favoriteTracks.prefix(index))
                     TrackRow(track: track, queue: queue, previousTracks: previous, showCover: true, navigationPath: $navigationPath)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                 }
+            } header: {
+                HStack {
+                    Text("Your favorites")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Theme.foreground)
+
+                    Spacer()
+
+                    Text("\(libraryManager.favoriteTracks.count) track\(libraryManager.favoriteTracks.count > 1 ? "s" : "")")
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.mutedForeground)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 24)
+                .padding(.bottom, 12)
+                .background(Theme.background)
             }
         }
     }
