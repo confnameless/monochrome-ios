@@ -41,60 +41,66 @@ struct NowPlayingView: View {
         ZStack {
             backgroundLayer
 
-            VStack(spacing: 0) {
-                // -- Handle: 3% --
-                Capsule()
-                    .fill(.white.opacity(0.4))
-                    .frame(width: 36, height: 5)
-                    .frame(height: usable * 0.03)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    // -- Handle: 3% --
+                    Capsule()
+                        .fill(.white.opacity(0.4))
+                        .frame(width: 36, height: 5)
+                        .frame(height: usable * 0.03)
 
-                // -- Top bar: 6% --
-                topBar
-                    .frame(height: usable * 0.06)
+                    // -- Top bar: 6% --
+                    topBar
+                        .frame(height: usable * 0.06)
 
-                // -- Gap: 2% --
-                Color.clear
-                    .frame(height: usable * 0.02)
+                    // -- Gap: 2% --
+                    Color.clear
+                        .frame(height: usable * 0.02)
 
-                // -- Album art: 42% (capped at width) --
-                albumArt
-                    .frame(width: artSize, height: artSize)
+                    // -- Album art: 42% (capped at width) --
+                    albumArt
+                        .frame(width: artSize, height: artSize)
 
-                // -- Gap: 3% --
-                Color.clear
-                    .frame(height: usable * 0.03)
+                    // -- Gap: 3% --
+                    Color.clear
+                        .frame(height: usable * 0.03)
 
-                // -- Track info: 7% --
-                trackInfo
-                    .frame(height: usable * 0.07)
+                    // -- Track info: 7% --
+                    trackInfo
+                        .frame(height: usable * 0.07)
 
-                // -- Gap: 1.5% --
-                Color.clear
-                    .frame(height: usable * 0.015)
+                    // -- Gap: 1.5% --
+                    Color.clear
+                        .frame(height: usable * 0.015)
 
-                // -- Progress: 7% --
-                progressBar
-                    .frame(height: usable * 0.07)
+                    // -- Progress: 7% --
+                    progressBar
+                        .frame(height: usable * 0.07)
 
-                // -- Gap: 0.5% --
-                Color.clear
-                    .frame(height: usable * 0.005)
+                    // -- Gap: 0.5% --
+                    Color.clear
+                        .frame(height: usable * 0.005)
 
-                // -- Controls: 11% --
-                controls
-                    .frame(height: usable * 0.11)
+                    // -- Controls: 11% --
+                    controls
+                        .frame(height: usable * 0.11)
 
-                // -- Gap: 1% --
-                Color.clear
-                    .frame(height: usable * 0.01)
+                    // -- Gap: 1% --
+                    Color.clear
+                        .frame(height: usable * 0.01)
 
-                // -- Queue: 5% --
-                queueInfo
-                    .frame(height: usable * 0.05)
+                    // -- Queue: 5% --
+                    queueInfo
+                        .frame(height: usable * 0.05)
+
+                    // -- Lyrics --
+                    LyricsView()
+                        .padding(.top, 40)
+                        .padding(.bottom, safeB + 40)
+                }
+                .padding(.horizontal, padX)
+                .padding(.top, safeT)
             }
-            .padding(.horizontal, padX)
-            .padding(.top, safeT)
-            .padding(.bottom, safeB)
         }
         .frame(width: screenW, height: screenH)
         .clipped()
