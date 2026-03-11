@@ -54,8 +54,7 @@ struct MiniPlayerView: View {
             .frame(height: 2)
         }
         .background(Theme.secondary.opacity(0.95))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .padding(.horizontal, 8)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
         .gesture(
             DragGesture(minimumDistance: 5)
                 .onChanged { value in
