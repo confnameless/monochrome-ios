@@ -386,40 +386,40 @@ struct SearchView: View {
     }
 
     private func suggestionRow(_ suggestion: Suggestion) -> some View {
-        Button {
-            handleSuggestionTap(suggestion)
-        } label: {
-            HStack(spacing: 12) {
-                suggestionIcon(suggestion)
+        HStack(spacing: 12) {
+            suggestionIcon(suggestion)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(suggestion.primaryText)
-                        .font(.system(size: 15))
-                        .foregroundColor(Theme.foreground)
-                        .lineLimit(1)
-                    if let secondary = suggestion.secondaryText {
-                        Text(secondary)
-                            .font(.system(size: 12))
-                            .foregroundColor(Theme.mutedForeground)
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer()
-
-                Button {
-                    searchText = suggestion.fillText
-                } label: {
-                    Image(systemName: "arrow.up.left")
-                        .font(.system(size: 13, weight: .medium))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(suggestion.primaryText)
+                    .font(.system(size: 15))
+                    .foregroundColor(Theme.foreground)
+                    .lineLimit(1)
+                if let secondary = suggestion.secondaryText {
+                    Text(secondary)
+                        .font(.system(size: 12))
                         .foregroundColor(Theme.mutedForeground)
-                        .frame(width: 32, height: 32)
+                        .lineLimit(1)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+
+            Spacer()
+
+            Button {
+                searchText = suggestion.fillText
+            } label: {
+                Image(systemName: "arrow.up.left")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Theme.mutedForeground)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            handleSuggestionTap(suggestion)
+        }
     }
 
     @ViewBuilder
