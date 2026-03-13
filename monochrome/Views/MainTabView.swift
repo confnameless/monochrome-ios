@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @State private var selectedTab = 0
+    @Environment(TabRouter.self) private var tabRouter
     @State private var homePath = NavigationPath()
     @State private var searchPath = NavigationPath()
     @State private var libraryPath = NavigationPath()
@@ -13,13 +13,20 @@ struct MainTabView: View {
     private let fullScreenH = UIScreen.main.bounds.height
 
     private var activeNavigationPath: Binding<NavigationPath> {
-        switch selectedTab {
+        switch tabRouter.selectedTab {
         case 0: return $homePath
         case 1: return $searchPath
         case 2: return $libraryPath
         case 3: return $profilePath
         default: return $homePath
         }
+    }
+
+    private var selectedTabBinding: Binding<Int> {
+        Binding(
+            get: { tabRouter.selectedTab },
+            set: { tabRouter.selectedTab = $0 }
+        )
     }
 
     var body: some View {
@@ -58,7 +65,7 @@ struct MainTabView: View {
 
     @available(iOS 26.0, *)
     private var nativeTabView: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: selectedTabBinding) {
             Tab("Home", systemImage: "house.fill", value: 0) {
                 NavigationStack(path: $homePath) {
                     HomeView(navigationPath: $homePath)
@@ -153,20 +160,20 @@ struct MainTabView: View {
         ZStack(alignment: .bottom) {
             ZStack {
                 legacyNavStack(path: $homePath) { HomeView(navigationPath: $homePath) }
-                    .opacity(selectedTab == 0 ? 1 : 0)
-                    .allowsHitTesting(selectedTab == 0)
+                    .opacity(tabRouter.selectedTab == 0 ? 1 : 0)
+                    .allowsHitTesting(tabRouter.selectedTab == 0)
 
                 legacyNavStack(path: $searchPath) { SearchView(navigationPath: $searchPath) }
-                    .opacity(selectedTab == 1 ? 1 : 0)
-                    .allowsHitTesting(selectedTab == 1)
+                    .opacity(tabRouter.selectedTab == 1 ? 1 : 0)
+                    .allowsHitTesting(tabRouter.selectedTab == 1)
 
                 legacyNavStack(path: $libraryPath) { LibraryView(navigationPath: $libraryPath) }
-                    .opacity(selectedTab == 2 ? 1 : 0)
-                    .allowsHitTesting(selectedTab == 2)
+                    .opacity(tabRouter.selectedTab == 2 ? 1 : 0)
+                    .allowsHitTesting(tabRouter.selectedTab == 2)
 
                 legacyNavStack(path: $profilePath) { ProfileView(navigationPath: $profilePath) }
-                    .opacity(selectedTab == 3 ? 1 : 0)
-                    .allowsHitTesting(selectedTab == 3)
+                    .opacity(tabRouter.selectedTab == 3 ? 1 : 0)
+                    .allowsHitTesting(tabRouter.selectedTab == 3)
             }
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .gesture(tabSwipeGesture)
@@ -179,10 +186,10 @@ struct MainTabView: View {
                 }
 
                 HStack(spacing: 0) {
-                    TabBarButton(icon: "house.fill", label: "Home", isSelected: selectedTab == 0) { selectedTab = 0 }
-                    TabBarButton(icon: "magnifyingglass", label: "Search", isSelected: selectedTab == 1) { selectedTab = 1 }
-                    TabBarButton(icon: "books.vertical.fill", label: "Library", isSelected: selectedTab == 2) { selectedTab = 2 }
-                    TabBarButton(icon: "person.fill", label: "Profile", isSelected: selectedTab == 3) { selectedTab = 3 }
+                    TabBarButton(icon: "house.fill", label: "Home", isSelected: tabRouter.selectedTab == 0) { tabRouter.selectedTab = 0 }
+                    TabBarButton(icon: "magnifyingglass", label: "Search", isSelected: tabRouter.selectedTab == 1) { tabRouter.selectedTab = 1 }
+                    TabBarButton(icon: "books.vertical.fill", label: "Library", isSelected: tabRouter.selectedTab == 2) { tabRouter.selectedTab = 2 }
+                    TabBarButton(icon: "person.fill", label: "Profile", isSelected: tabRouter.selectedTab == 3) { tabRouter.selectedTab = 3 }
                 }
                 .padding(.top, 10)
                 .padding(.bottom, 8)
@@ -229,9 +236,9 @@ struct MainTabView: View {
                 guard abs(h) > abs(v) * 1.5, abs(h) > 50 else { return }
                 withAnimation(.easeInOut(duration: 0.25)) {
                     if h < 0 {
-                        selectedTab = min(3, selectedTab + 1)
+                        tabRouter.selectedTab = min(3, tabRouter.selectedTab + 1)
                     } else {
-                        selectedTab = max(0, selectedTab - 1)
+                        tabRouter.selectedTab = max(0, tabRouter.selectedTab - 1)
                     }
                 }
             }

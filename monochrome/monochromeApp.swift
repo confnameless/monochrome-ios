@@ -9,6 +9,7 @@ struct MonochromeIOSApp: App {
     @State private var playlistManager = PlaylistManager.shared
     @State private var profileManager = ProfileManager.shared
     @State private var downloadManager = DownloadManager.shared
+    @State private var tabRouter = TabRouter()
     @State private var syncTimer: Timer?
 
     var body: some Scene {
@@ -20,6 +21,7 @@ struct MonochromeIOSApp: App {
                 .environment(playlistManager)
                 .environment(profileManager)
                 .environment(downloadManager)
+                .environment(tabRouter)
                 .onAppear {
                     setupAudioSession()
                     triggerSyncIfNeeded()
@@ -42,6 +44,7 @@ struct MonochromeIOSApp: App {
             await libraryManager.syncFromCloud(uid: uid)
             await playlistManager.syncFromCloud(uid: uid)
             await profileManager.syncFromCloud(uid: uid)
+            await audioPlayerService.syncHistoryFromCloud(uid: uid)
         }
     }
 

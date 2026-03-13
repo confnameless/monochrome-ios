@@ -10,16 +10,7 @@ struct LibraryView: View {
     @State private var showCreatePlaylist = false
     @State private var showCreateFolder = false
     @State private var newItemName = ""
-
-    enum LibraryFilter: String, CaseIterable {
-        case all = "All"
-        case myPlaylists = "My Playlists"
-        case tracks = "Tracks"
-        case albums = "Albums"
-        case artists = "Artists"
-        case playlists = "Playlists"
-        case mixes = "Mixes"
-    }
+    @Environment(TabRouter.self) private var tabRouter
 
     private var isEmpty: Bool {
         libraryManager.favoriteTracks.isEmpty &&
@@ -41,7 +32,22 @@ struct LibraryView: View {
         return filters
     }
 
+    private func applyPendingFilter() {
+        guard let filter = tabRouter.pendingLibraryFilter else { return }
+        selectedFilter = filter
+        tabRouter.pendingLibraryFilter = nil
+    }
+
     var body: some View {
+        mainContent
+            .onAppear { applyPendingFilter() }
+            .onChange(of: tabRouter.pendingLibraryFilter) { _, _ in
+                applyPendingFilter()
+            }
+    }
+
+    @ViewBuilder
+    private var mainContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack {

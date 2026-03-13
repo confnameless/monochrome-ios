@@ -37,6 +37,7 @@ class AudioPlayerService {
 
     private var savedQueueForRepeatOne: [Track] = []
     private let restartThreshold: TimeInterval = 3
+    private let historyMaxCount = 100
 
     var hasPreviousTrack: Bool { !previousInSession.isEmpty || currentTime >= restartThreshold }
     var hasNextTrack: Bool { !queuedTracks.isEmpty || repeatMode != .off }
@@ -609,7 +610,7 @@ class AudioPlayerService {
         UserDefaults.standard.set(currentTime, forKey: savedTimestampKey)
         UserDefaults.standard.set(duration, forKey: savedDurationKey)
 
-        let historyToSave = Array(playHistory.suffix(20)) // Keep last 20
+        let historyToSave = Array(playHistory.suffix(historyMaxCount))
         let historyDropCount = playHistory.count - historyToSave.count
         if let data = try? JSONEncoder().encode(historyToSave) {
             UserDefaults.standard.set(data, forKey: playHistoryKey)
@@ -687,6 +688,20 @@ class AudioPlayerService {
     }
 
     // MARK: - Cloud History Sync
+
+    func syncHistoryFromCloud(uid: String) async {
+        do {
+            let historyTracks = try await PocketBaseService.shared.fetchHistory(uid: uid)
+            guard !historyTracks.isEmpty else { return }
+            await MainActor.run {
+                self.playHistory = historyTracks
+                self.queueSessionHistoryStart = historyTracks.count
+                self.saveState()
+            }
+        } catch {
+            print("[Sync] History fetch error: \(error.localizedDescription)")
+        }
+    }
 
     private func syncHistoryInBackground(track: Track) {
         guard let uid = AuthService.shared.currentUser?.uid else { return }

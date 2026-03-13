@@ -91,6 +91,12 @@ class PocketBaseService {
         return (cloudTracks, cloudAlbums, cloudArtists, cloudPlaylists, cloudMixes, historyTracks)
     }
 
+    func fetchHistory(uid: String) async throws -> [Track] {
+        let record = try await getUserRecord(uid: uid, forceRefresh: true)
+        let cloudHistory = parseJSONArray(record.history) ?? []
+        return cloudHistory.compactMap { $0 as? [String: Any] }.decodeTracks()
+    }
+
     // MARK: - Sync Single Library Item (on toggle)
 
     func syncLibraryItem(uid: String, type: String, track: Track? = nil, album: Album? = nil, artist: Artist? = nil, playlist: Playlist? = nil, mix: Mix? = nil, added: Bool) async throws {

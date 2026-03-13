@@ -8,11 +8,31 @@ struct ProfileView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ProfileManager.self) private var profileManager
     @Environment(PlaylistManager.self) private var playlistManager
+    @Environment(TabRouter.self) private var tabRouter
     @State private var activeSheet: ProfileSheet?
 
-    private enum ProfileSheet: Identifiable {
-        case settings, login, editProfile
-        var id: Self { self }
+    private enum ProfileSheet: Identifiable, Hashable {
+        case settings
+        case login
+        case editProfile
+        case listeningHistory
+        
+        var id: String {
+            switch self {
+            case .settings: return "settings"
+            case .login: return "login"
+            case .editProfile: return "editProfile"
+            case .listeningHistory: return "listeningHistory"
+            }
+        }
+        
+        static func == (lhs: ProfileSheet, rhs: ProfileSheet) -> Bool {
+            lhs.id == rhs.id
+        }
+        
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(id)
+        }
     }
 
     var body: some View {
@@ -254,13 +274,15 @@ struct ProfileView: View {
                 // MARK: - Quick Links
                 VStack(spacing: 0) {
                     ProfileLink(icon: "heart.fill", title: "Favorite Tracks", subtitle: "\(libraryManager.favoriteTracks.count) tracks") {
-                        // Could navigate to library favorites
+                        tabRouter.pendingLibraryFilter = .tracks
+                        tabRouter.selectedTab = 2
                     }
                     ProfileLink(icon: "music.note.list", title: "My Playlists", subtitle: "\(playlistManager.userPlaylists.count) playlists") {
-                        // Could navigate to playlists
+                        tabRouter.pendingLibraryFilter = .myPlaylists
+                        tabRouter.selectedTab = 2
                     }
                     ProfileLink(icon: "clock.arrow.circlepath", title: "Listening History", subtitle: "\(historyCount) tracks") {
-                        // Could navigate to history
+                        activeSheet = .listeningHistory
                     }
                 }
                 .padding(.horizontal, 16)
@@ -284,6 +306,12 @@ struct ProfileView: View {
             case .editProfile:
                 EditProfileView()
                     .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(Theme.background)
+            case .listeningHistory:
+                ListeningHistoryView()
+                    .environment(audioPlayer)
+                    .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     .presentationBackground(Theme.background)
             }
@@ -1123,6 +1151,89 @@ private struct ProfileLink: View {
         .buttonStyle(.plain)
         .disabled(disabled)
         .padding(.bottom, 8)
+    }
+}
+
+// MARK: - Listening History View
+
+struct ListeningHistoryView: View {
+    @Environment(AudioPlayerService.self) private var audioPlayer
+    @Environment(\.dismiss) private var dismiss
+    
+    private var reversedHistory: [Track] {
+        audioPlayer.playHistory.reversed()
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(reversedHistory.enumerated()), id: \.offset) { index, track in
+                        ProfileTrackRow(track: track, index: index + 1) {
+                            audioPlayer.play(track: track, queue: Array(reversedHistory.dropFirst(index + 1)))
+                        }
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Listening History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Profile Track Row (Simple)
+
+private struct ProfileTrackRow: View {
+    let track: Track
+    let index: Int
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Text("\(index)")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(Theme.mutedForeground)
+                    .frame(width: 28, alignment: .center)
+                
+                if let coverUrl = MonochromeAPI().getImageUrl(id: track.album?.cover) {
+                    AsyncImage(url: coverUrl) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFill()
+                        } else {
+                            Rectangle().fill(Theme.secondary)
+                        }
+                    }
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(track.title)
+                        .font(.system(size: 15))
+                        .foregroundColor(Theme.foreground)
+                        .lineLimit(1)
+                    Text(track.artist?.name ?? "Unknown Artist")
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.mutedForeground)
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
     }
 }
 
