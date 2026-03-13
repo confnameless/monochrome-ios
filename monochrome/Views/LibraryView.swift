@@ -927,7 +927,7 @@ private struct FolderRow: View {
 @ViewBuilder
 private func userPlaylistCover(_ playlist: UserPlaylist) -> some View {
     if !playlist.cover.isEmpty {
-        AsyncImage(url: MonochromeAPI().getImageUrl(id: playlist.cover)) { phase in
+        AsyncImage(url: playlist.cover.hasPrefix("http") ? URL(string: playlist.cover) : MonochromeAPI().getImageUrl(id: playlist.cover)) { phase in
             if let image = phase.image {
                 image.resizable().scaledToFill()
             } else {

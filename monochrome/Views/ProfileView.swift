@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct ProfileView: View {
     @Binding var navigationPath: NavigationPath
@@ -7,9 +8,12 @@ struct ProfileView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ProfileManager.self) private var profileManager
     @Environment(PlaylistManager.self) private var playlistManager
-    @State private var showSettings = false
-    @State private var showLogin = false
-    @State private var showEditProfile = false
+    @State private var activeSheet: ProfileSheet?
+
+    private enum ProfileSheet: Identifiable {
+        case settings, login, editProfile
+        var id: Self { self }
+    }
 
     var body: some View {
         ScrollView {
@@ -21,7 +25,7 @@ struct ProfileView: View {
                         .foregroundColor(Theme.foreground)
                     Spacer()
                     if authService.isAuthenticated {
-                        Button { showEditProfile = true } label: {
+                        Button { activeSheet = .editProfile } label: {
                             Image(systemName: "pencil")
                                 .font(.system(size: 18))
                                 .foregroundColor(Theme.foreground)
@@ -31,7 +35,7 @@ struct ProfileView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    Button { showSettings = true } label: {
+                    Button { activeSheet = .settings } label: {
                         Image(systemName: "gearshape")
                             .font(.system(size: 20))
                             .foregroundColor(Theme.foreground)
@@ -44,6 +48,7 @@ struct ProfileView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 16)
+                .zIndex(1)
 
                 // MARK: - Banner
                 if authService.isAuthenticated && !profileManager.profile.banner.isEmpty {
@@ -56,8 +61,10 @@ struct ProfileView: View {
                     }
                     .frame(height: 120)
                     .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .allowsHitTesting(false)
                     .padding(.horizontal, 16)
                     .padding(.bottom, -40)
                 }
@@ -110,10 +117,7 @@ struct ProfileView: View {
 
                             // Status
                             if !profileManager.profile.status.isEmpty {
-                                Text(profileManager.profile.status)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(Theme.mutedForeground)
-                                    .italic()
+                                statusView(profileManager.profile.status)
                                     .padding(.top, 2)
                             }
 
@@ -153,6 +157,52 @@ struct ProfileView: View {
                 .padding(.top, profileManager.profile.banner.isEmpty || !authService.isAuthenticated ? 16 : 0)
                 .padding(.bottom, 24)
 
+                // MARK: - Favorite Albums
+                if authService.isAuthenticated && !profileManager.profile.favoriteAlbums.isEmpty {
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text("Favorite Albums")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(Theme.foreground)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(profileManager.profile.favoriteAlbums) { album in
+                                    VStack(spacing: 6) {
+                                        if !album.cover.isEmpty, let url = URL(string: album.cover) {
+                                            AsyncImage(url: url) { phase in
+                                                if let image = phase.image {
+                                                    image.resizable().scaledToFill()
+                                                } else {
+                                                    RoundedRectangle(cornerRadius: 6).fill(Theme.secondary)
+                                                }
+                                            }
+                                            .frame(width: 100, height: 100)
+                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                        }
+                                        Text(album.title)
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundColor(Theme.foreground)
+                                            .lineLimit(1)
+                                            .frame(width: 100)
+                                        Text(album.artist)
+                                            .font(.system(size: 11))
+                                            .foregroundColor(Theme.mutedForeground)
+                                            .lineLimit(1)
+                                            .frame(width: 100)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                        }
+                    }
+                    .padding(.bottom, 24)
+                }
+
                 // MARK: - Sign In / Sign Out
                 if authService.isAuthenticated {
                     Button {
@@ -175,7 +225,7 @@ struct ProfileView: View {
                     .padding(.bottom, 32)
                 } else {
                     SignInButton(icon: "envelope.fill", label: "Sign In / Create Account", style: .primary) {
-                        showLogin = true
+                        activeSheet = .login
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 32)
@@ -219,23 +269,24 @@ struct ProfileView: View {
             }
         }
         .background(Theme.background)
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(Theme.background)
-        }
-        .sheet(isPresented: $showLogin) {
-            LoginView()
-                .environment(authService)
-                .presentationDragIndicator(.visible)
-                .presentationBackground(Theme.background)
-        }
-        .sheet(isPresented: $showEditProfile) {
-            EditProfileView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(Theme.background)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .settings:
+                SettingsView()
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(Theme.background)
+            case .login:
+                LoginView()
+                    .environment(authService)
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(Theme.background)
+            case .editProfile:
+                EditProfileView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(Theme.background)
+            }
         }
     }
 
@@ -247,6 +298,45 @@ struct ProfileView: View {
         let totalSeconds = audioPlayer.playHistory.reduce(0) { $0 + $1.duration }
         let minutes = totalSeconds / 60
         return "\(minutes)"
+    }
+
+    @ViewBuilder
+    private func statusView(_ status: String) -> some View {
+        if let data = status.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let title = json["title"] as? String {
+            let subtitle = json["subtitle"] as? String ?? ""
+            let imageUrl = json["image"] as? String ?? ""
+
+            HStack(spacing: 8) {
+                if !imageUrl.isEmpty, let url = URL(string: imageUrl) {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFill()
+                        } else {
+                            RoundedRectangle(cornerRadius: 3).fill(Theme.secondary)
+                        }
+                    }
+                    .frame(width: 28, height: 28)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Listening to")
+                        .font(.system(size: 11))
+                        .foregroundColor(Theme.mutedForeground)
+                    Text("\(title)\(subtitle.isEmpty ? "" : " · \(subtitle)")")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Theme.foreground.opacity(0.85))
+                        .lineLimit(1)
+                }
+            }
+        } else {
+            Text(status)
+                .font(.system(size: 13))
+                .foregroundColor(Theme.mutedForeground)
+                .italic()
+        }
     }
 
     private var avatarInitial: String {
@@ -268,7 +358,8 @@ struct EditProfileView: View {
     @State private var displayName = ""
     @State private var avatarUrl = ""
     @State private var banner = ""
-    @State private var status = ""
+    @State private var statusSearch = ""
+    @State private var statusJson = ""
     @State private var about = ""
     @State private var website = ""
     @State private var lastfmUsername = ""
@@ -276,18 +367,131 @@ struct EditProfileView: View {
     @State private var lastfmPublic = true
     @State private var isSaving = false
 
+    // Image picker
+    @State private var avatarPickerItem: PhotosPickerItem?
+    @State private var bannerPickerItem: PhotosPickerItem?
+    @State private var isUploadingAvatar = false
+    @State private var isUploadingBanner = false
+    @State private var uploadError = ""
+
+    // Favorite albums
+    @State private var favoriteAlbums: [FavoriteAlbum] = []
+    @State private var favAlbumSearch = ""
+    @State private var favAlbumResults: [Album] = []
+    @State private var favSearchTask: Task<Void, Never>?
+    @State private var editingFavDescription: String? = nil
+    @State private var favDescriptionText = ""
+
+    // Status autocomplete
+    @State private var statusSuggestions: [StatusSuggestion] = []
+    @State private var statusTask: Task<Void, Never>?
+    @State private var showStatusSuggestions = false
+    @State private var suppressStatusUpdate = false
+    @FocusState private var statusFocused: Bool
+
     var body: some View {
         NavigationView {
             List {
                 Section("Display") {
                     ProfileTextField(label: "Username", text: $username, icon: "at")
                     ProfileTextField(label: "Display Name", text: $displayName, icon: "person")
-                    ProfileTextField(label: "Avatar URL", text: $avatarUrl, icon: "photo")
-                    ProfileTextField(label: "Banner URL", text: $banner, icon: "photo.on.rectangle")
+
+                    // Avatar
+                    ImageUploadRow(
+                        label: "Avatar",
+                        currentUrl: avatarUrl,
+                        isUploading: isUploadingAvatar,
+                        pickerItem: $avatarPickerItem,
+                        urlBinding: $avatarUrl
+                    )
+
+                    // Banner
+                    ImageUploadRow(
+                        label: "Banner",
+                        currentUrl: banner,
+                        isUploading: isUploadingBanner,
+                        pickerItem: $bannerPickerItem,
+                        urlBinding: $banner
+                    )
+
+                    if !uploadError.isEmpty {
+                        Text(uploadError)
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
+                    }
                 }
 
                 Section("About") {
-                    ProfileTextField(label: "Status", text: $status, icon: "text.bubble")
+                    // Status with autocomplete
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "text.bubble")
+                                .font(.system(size: 14))
+                                .foregroundColor(Theme.mutedForeground)
+                                .frame(width: 20)
+                            TextField("Status (listening to...)", text: $statusSearch)
+                                .font(.system(size: 15))
+                                .foregroundColor(Theme.foreground)
+                                .focused($statusFocused)
+                                .onChange(of: statusSearch) { _, newValue in
+                                    if suppressStatusUpdate {
+                                        suppressStatusUpdate = false
+                                        return
+                                    }
+                                    updateStatusSuggestions(query: newValue)
+                                }
+
+                            if !statusJson.isEmpty {
+                                Button {
+                                    statusJson = ""
+                                    statusSearch = ""
+                                    statusSuggestions = []
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(Theme.mutedForeground)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        if showStatusSuggestions && !statusSuggestions.isEmpty {
+                            VStack(spacing: 0) {
+                                ForEach(statusSuggestions) { suggestion in
+                                    Button {
+                                        selectStatus(suggestion)
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            AsyncImage(url: MonochromeAPI().getImageUrl(id: suggestion.image, size: 80)) { phase in
+                                                if let image = phase.image {
+                                                    image.resizable().scaledToFill()
+                                                } else {
+                                                    RoundedRectangle(cornerRadius: 3).fill(Theme.secondary)
+                                                }
+                                            }
+                                            .frame(width: 36, height: 36)
+                                            .clipShape(RoundedRectangle(cornerRadius: 3))
+
+                                            VStack(alignment: .leading, spacing: 1) {
+                                                Text(suggestion.title)
+                                                    .font(.system(size: 13, weight: .medium))
+                                                    .foregroundColor(Theme.foreground)
+                                                    .lineLimit(1)
+                                                Text("\(suggestion.subtitle) · \(suggestion.type == "track" ? "Track" : "Album")")
+                                                    .font(.system(size: 11))
+                                                    .foregroundColor(Theme.mutedForeground)
+                                                    .lineLimit(1)
+                                            }
+                                            Spacer()
+                                        }
+                                        .padding(.vertical, 6)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Bio")
                             .font(.system(size: 12))
@@ -299,6 +503,117 @@ struct EditProfileView: View {
                             .scrollContentBackground(.hidden)
                     }
                     ProfileTextField(label: "Website", text: $website, icon: "link")
+                }
+
+                Section("Favorite Albums (max 5)") {
+                    ForEach(Array(favoriteAlbums.enumerated()), id: \.element.id) { index, album in
+                        HStack(spacing: 10) {
+                            if !album.cover.isEmpty {
+                                AsyncImage(url: URL(string: album.cover)) { phase in
+                                    if let image = phase.image {
+                                        image.resizable().scaledToFill()
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 4).fill(Theme.secondary)
+                                    }
+                                }
+                                .frame(width: 44, height: 44)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(album.title)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(Theme.foreground)
+                                    .lineLimit(1)
+                                Text(album.artist)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(Theme.mutedForeground)
+                                    .lineLimit(1)
+                                if !album.description.isEmpty {
+                                    Text(album.description)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Theme.mutedForeground.opacity(0.7))
+                                        .lineLimit(1)
+                                        .italic()
+                                }
+                            }
+
+                            Spacer()
+
+                            Button {
+                                editingFavDescription = album.id
+                                favDescriptionText = album.description
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Theme.mutedForeground)
+                            }
+                            .buttonStyle(.borderless)
+
+                            Button {
+                                withAnimation { favoriteAlbums.removeAll { $0.id == album.id } }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.red.opacity(0.6))
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+
+                    if favoriteAlbums.count < 5 {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(Theme.mutedForeground)
+                                    .frame(width: 20)
+                                TextField("Search album to add...", text: $favAlbumSearch)
+                                    .font(.system(size: 15))
+                                    .foregroundColor(Theme.foreground)
+                                    .onChange(of: favAlbumSearch) { _, newValue in
+                                        searchFavAlbums(query: newValue)
+                                    }
+                            }
+
+                            if !favAlbumResults.isEmpty {
+                                ForEach(favAlbumResults.prefix(5)) { album in
+                                    Button {
+                                        addFavoriteAlbum(album)
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            AsyncImage(url: MonochromeAPI().getImageUrl(id: album.cover ?? "", size: 80)) { phase in
+                                                if let image = phase.image {
+                                                    image.resizable().scaledToFill()
+                                                } else {
+                                                    RoundedRectangle(cornerRadius: 3).fill(Theme.secondary)
+                                                }
+                                            }
+                                            .frame(width: 36, height: 36)
+                                            .clipShape(RoundedRectangle(cornerRadius: 3))
+
+                                            VStack(alignment: .leading, spacing: 1) {
+                                                Text(album.title)
+                                                    .font(.system(size: 13, weight: .medium))
+                                                    .foregroundColor(Theme.foreground)
+                                                    .lineLimit(1)
+                                                Text(album.artist?.name ?? "")
+                                                    .font(.system(size: 11))
+                                                    .foregroundColor(Theme.mutedForeground)
+                                                    .lineLimit(1)
+                                            }
+                                            Spacer()
+                                            Image(systemName: "plus.circle")
+                                                .font(.system(size: 16))
+                                                .foregroundColor(Theme.foreground)
+                                        }
+                                        .padding(.vertical, 4)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Section("Integrations") {
@@ -339,15 +654,229 @@ struct EditProfileView: View {
                 displayName = p.displayName
                 avatarUrl = p.avatarUrl
                 banner = p.banner
-                status = p.status
                 about = p.about
                 website = p.website
                 lastfmUsername = p.lastfmUsername
                 playlistsPublic = p.privacy.playlists == "public"
                 lastfmPublic = p.privacy.lastfm == "public"
+                favoriteAlbums = p.favoriteAlbums
+                // Parse existing status
+                if let data = p.status.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let text = json["text"] as? String {
+                    statusSearch = text
+                    statusJson = p.status
+                } else {
+                    statusSearch = p.status
+                    statusJson = ""
+                }
+            }
+            .onChange(of: avatarPickerItem) { _, item in
+                guard let item else { return }
+                loadAndUpload(item: item, for: .avatar)
+                avatarPickerItem = nil
+            }
+            .onChange(of: bannerPickerItem) { _, item in
+                guard let item else { return }
+                loadAndUpload(item: item, for: .banner)
+                bannerPickerItem = nil
+            }
+            .alert("Album Description", isPresented: Binding(
+                get: { editingFavDescription != nil },
+                set: { if !$0 { editingFavDescription = nil } }
+            )) {
+                TextField("Why do you love this album?", text: $favDescriptionText)
+                Button("Cancel", role: .cancel) { editingFavDescription = nil }
+                Button("Save") {
+                    if let id = editingFavDescription,
+                       let idx = favoriteAlbums.firstIndex(where: { $0.id == id }) {
+                        favoriteAlbums[idx].description = favDescriptionText
+                    }
+                    editingFavDescription = nil
+                }
             }
         }
     }
+
+    // MARK: - Status Autocomplete
+
+    private func updateStatusSuggestions(query: String) {
+        statusTask?.cancel()
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+
+        if trimmed.count < 2 {
+            statusSuggestions = []
+            showStatusSuggestions = false
+            statusJson = ""
+            return
+        }
+
+        showStatusSuggestions = true
+
+        statusTask = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+
+            do {
+                let r = try await MonochromeAPI().searchAll(query: trimmed)
+                guard !Task.isCancelled else { return }
+
+                var results: [StatusSuggestion] = []
+                results += r.tracks.prefix(3).map {
+                    StatusSuggestion(type: "track", id: String($0.id), title: $0.title, subtitle: $0.artist?.name ?? "", image: $0.album?.cover ?? "")
+                }
+                results += r.albums.prefix(3).map {
+                    StatusSuggestion(type: "album", id: String($0.id), title: $0.title, subtitle: $0.artist?.name ?? "", image: $0.cover ?? "")
+                }
+
+                await MainActor.run {
+                    statusSuggestions = results
+                }
+            } catch {}
+        }
+    }
+
+    private func selectStatus(_ suggestion: StatusSuggestion) {
+        suppressStatusUpdate = true
+        statusSearch = "\(suggestion.title) - \(suggestion.subtitle)"
+        showStatusSuggestions = false
+        statusSuggestions = []
+        statusFocused = false
+
+        let imageUrl: String
+        if let url = MonochromeAPI().getImageUrl(id: suggestion.image, size: 160) {
+            imageUrl = url.absoluteString
+        } else {
+            imageUrl = ""
+        }
+
+        let statusObj: [String: Any] = [
+            "type": suggestion.type,
+            "id": suggestion.id,
+            "text": "\(suggestion.title) - \(suggestion.subtitle)",
+            "title": suggestion.title,
+            "subtitle": suggestion.subtitle,
+            "image": imageUrl,
+            "link": "/\(suggestion.type)/\(suggestion.id)"
+        ]
+
+        if let data = try? JSONSerialization.data(withJSONObject: statusObj),
+           let jsonStr = String(data: data, encoding: .utf8) {
+            statusJson = jsonStr
+        }
+    }
+
+    // MARK: - Image Upload
+
+    private enum ImageTarget { case avatar, banner }
+
+    private func loadAndUpload(item: PhotosPickerItem, for target: ImageTarget) {
+        switch target {
+        case .avatar: isUploadingAvatar = true
+        case .banner: isUploadingBanner = true
+        }
+        Task {
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else {
+                await MainActor.run {
+                    switch target {
+                    case .avatar: isUploadingAvatar = false
+                    case .banner: isUploadingBanner = false
+                    }
+                }
+                return
+            }
+            uploadImage(image, for: target)
+        }
+    }
+
+    private func uploadImage(_ image: UIImage, for target: ImageTarget) {
+        switch target {
+        case .avatar: isUploadingAvatar = true
+        case .banner: isUploadingBanner = true
+        }
+
+        Task {
+            guard let data = ImageUploadService.shared.compressImage(image) else {
+                await MainActor.run {
+                    switch target {
+                    case .avatar: isUploadingAvatar = false
+                    case .banner: isUploadingBanner = false
+                    }
+                }
+                return
+            }
+
+            do {
+                let url = try await ImageUploadService.shared.upload(imageData: data)
+                await MainActor.run {
+                    uploadError = ""
+                    switch target {
+                    case .avatar:
+                        avatarUrl = url
+                        isUploadingAvatar = false
+                    case .banner:
+                        banner = url
+                        isUploadingBanner = false
+                    }
+                }
+            } catch {
+                print("[Upload] Error: \(error.localizedDescription)")
+                await MainActor.run {
+                    uploadError = error.localizedDescription
+                    switch target {
+                    case .avatar: isUploadingAvatar = false
+                    case .banner: isUploadingBanner = false
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Favorite Albums Search
+
+    private func searchFavAlbums(query: String) {
+        favSearchTask?.cancel()
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        if trimmed.count < 2 {
+            favAlbumResults = []
+            return
+        }
+        favSearchTask = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            do {
+                let r = try await MonochromeAPI().searchAll(query: trimmed)
+                guard !Task.isCancelled else { return }
+                await MainActor.run { favAlbumResults = r.albums }
+            } catch {}
+        }
+    }
+
+    private func addFavoriteAlbum(_ album: Album) {
+        guard favoriteAlbums.count < 5 else { return }
+        guard !favoriteAlbums.contains(where: { $0.id == String(album.id) }) else { return }
+
+        let imageUrl: String
+        if let url = MonochromeAPI().getImageUrl(id: album.cover ?? "", size: 320) {
+            imageUrl = url.absoluteString
+        } else {
+            imageUrl = ""
+        }
+
+        let fav = FavoriteAlbum(
+            id: String(album.id),
+            title: album.title,
+            artist: album.artist?.name ?? "",
+            cover: imageUrl,
+            description: ""
+        )
+        withAnimation { favoriteAlbums.append(fav) }
+        favAlbumSearch = ""
+        favAlbumResults = []
+    }
+
+    // MARK: - Save
 
     private func save() {
         isSaving = true
@@ -355,12 +884,13 @@ struct EditProfileView: View {
         profileManager.profile.displayName = displayName.trimmingCharacters(in: .whitespaces)
         profileManager.profile.avatarUrl = avatarUrl.trimmingCharacters(in: .whitespaces)
         profileManager.profile.banner = banner.trimmingCharacters(in: .whitespaces)
-        profileManager.profile.status = status.trimmingCharacters(in: .whitespaces)
+        profileManager.profile.status = statusJson.isEmpty ? statusSearch.trimmingCharacters(in: .whitespaces) : statusJson
         profileManager.profile.about = about.trimmingCharacters(in: .whitespaces)
         profileManager.profile.website = website.trimmingCharacters(in: .whitespaces)
         profileManager.profile.lastfmUsername = lastfmUsername.trimmingCharacters(in: .whitespaces)
         profileManager.profile.privacy.playlists = playlistsPublic ? "public" : "private"
         profileManager.profile.privacy.lastfm = lastfmPublic ? "public" : "private"
+        profileManager.profile.favoriteAlbums = favoriteAlbums
 
         guard let uid = authService.currentUser?.uid else {
             isSaving = false
@@ -373,6 +903,105 @@ struct EditProfileView: View {
             await MainActor.run {
                 isSaving = false
                 dismiss()
+            }
+        }
+    }
+}
+
+// MARK: - Status Suggestion
+
+private struct StatusSuggestion: Identifiable {
+    let type: String
+    let id: String
+    let title: String
+    let subtitle: String
+    let image: String
+}
+
+// MARK: - Image Upload Row
+
+private struct ImageUploadRow: View {
+    let label: String
+    let currentUrl: String
+    let isUploading: Bool
+    @Binding var pickerItem: PhotosPickerItem?
+    @Binding var urlBinding: String
+
+    @State private var showUrlInput = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "photo")
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.mutedForeground)
+                    .frame(width: 20)
+
+                Text(label)
+                    .font(.system(size: 15))
+                    .foregroundColor(Theme.foreground)
+
+                Spacer()
+
+                if isUploading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                } else if !currentUrl.isEmpty {
+                    AsyncImage(url: URL(string: currentUrl)) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFill()
+                        } else {
+                            RoundedRectangle(cornerRadius: 4).fill(Theme.secondary)
+                        }
+                    }
+                    .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+            }
+
+            HStack(spacing: 8) {
+                PhotosPicker(selection: $pickerItem, matching: .images) {
+                    Label("Upload", systemImage: "arrow.up.circle")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Theme.foreground)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Theme.secondary)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showUrlInput.toggle()
+                } label: {
+                    Label("URL", systemImage: "link")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Theme.foreground)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Theme.secondary)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                if !currentUrl.isEmpty {
+                    Button {
+                        urlBinding = ""
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 13))
+                            .foregroundColor(.red.opacity(0.7))
+                            .padding(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if showUrlInput {
+                TextField("Paste image URL", text: $urlBinding)
+                    .font(.system(size: 13))
+                    .foregroundColor(Theme.foreground)
+                    .textFieldStyle(.roundedBorder)
             }
         }
     }

@@ -128,6 +128,25 @@ struct UserFolder: Identifiable, Codable, Hashable {
 
 // MARK: - User Profile
 
+struct FavoriteAlbum: Codable, Identifiable, Hashable {
+    let id: String
+    var title: String
+    var artist: String
+    var cover: String
+    var description: String
+
+    init(id: String = "", title: String = "", artist: String = "", cover: String = "", description: String = "") {
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.cover = cover
+        self.description = description
+    }
+
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    static func == (lhs: FavoriteAlbum, rhs: FavoriteAlbum) -> Bool { lhs.id == rhs.id }
+}
+
 struct UserProfile: Codable {
     var username: String
     var displayName: String
@@ -139,8 +158,9 @@ struct UserProfile: Codable {
     var lastfmUsername: String
     var privacy: ProfilePrivacy
     var historyCount: Int
+    var favoriteAlbums: [FavoriteAlbum]
 
-    init(username: String = "", displayName: String = "", avatarUrl: String = "", banner: String = "", status: String = "", about: String = "", website: String = "", lastfmUsername: String = "", privacy: ProfilePrivacy = ProfilePrivacy(), historyCount: Int = 0) {
+    init(username: String = "", displayName: String = "", avatarUrl: String = "", banner: String = "", status: String = "", about: String = "", website: String = "", lastfmUsername: String = "", privacy: ProfilePrivacy = ProfilePrivacy(), historyCount: Int = 0, favoriteAlbums: [FavoriteAlbum] = []) {
         self.username = username
         self.displayName = displayName
         self.avatarUrl = avatarUrl
@@ -151,6 +171,7 @@ struct UserProfile: Codable {
         self.lastfmUsername = lastfmUsername
         self.privacy = privacy
         self.historyCount = historyCount
+        self.favoriteAlbums = favoriteAlbums
     }
 }
 

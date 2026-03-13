@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct UserPlaylistDetailView: View {
     let playlistId: String
@@ -9,6 +10,11 @@ struct UserPlaylistDetailView: View {
     @State private var showRenameAlert = false
     @State private var renameText = ""
     @State private var showDeleteConfirm = false
+    @State private var coverPickerItem: PhotosPickerItem?
+    @State private var isUploadingCover = false
+    @State private var coverUploadError = ""
+    @State private var showCoverUrlInput = false
+    @State private var coverUrlText = ""
 
     private var playlist: UserPlaylist? {
         playlistManager.userPlaylists.first { $0.id == playlistId }
@@ -86,6 +92,45 @@ struct UserPlaylistDetailView: View {
         } message: {
             Text("This action cannot be undone.")
         }
+        .alert("Cover Image URL", isPresented: $showCoverUrlInput) {
+            TextField("https://...", text: $coverUrlText)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                let url = coverUrlText.trimmingCharacters(in: .whitespaces)
+                if !url.isEmpty {
+                    playlistManager.updatePlaylistCover(id: playlistId, cover: url)
+                }
+            }
+        } message: {
+            Text("Paste a direct image URL")
+        }
+        .onChange(of: coverPickerItem) { _, item in
+            guard let item else { return }
+            coverPickerItem = nil
+            isUploadingCover = true
+            Task {
+                guard let data = try? await item.loadTransferable(type: Data.self),
+                      let image = UIImage(data: data),
+                      let compressed = ImageUploadService.shared.compressImage(image) else {
+                    await MainActor.run { isUploadingCover = false }
+                    return
+                }
+                do {
+                    let url = try await ImageUploadService.shared.upload(imageData: compressed)
+                    await MainActor.run {
+                        coverUploadError = ""
+                        playlistManager.updatePlaylistCover(id: playlistId, cover: url)
+                        isUploadingCover = false
+                    }
+                } catch {
+                    print("[Upload] Cover error: \(error.localizedDescription)")
+                    await MainActor.run {
+                        coverUploadError = error.localizedDescription
+                        isUploadingCover = false
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Header
@@ -94,11 +139,66 @@ struct UserPlaylistDetailView: View {
     private func playlistHeader(_ playlist: UserPlaylist) -> some View {
         VStack(spacing: 16) {
             // Cover
-            playlistCover(playlist)
-                .frame(width: 200, height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .shadow(color: .black.opacity(0.3), radius: 16, y: 8)
-                .padding(.top, 16)
+            ZStack {
+                playlistCover(playlist)
+                    .frame(width: 200, height: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                if isUploadingCover {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.black.opacity(0.5))
+                        .frame(width: 200, height: 200)
+                        .overlay(ProgressView().tint(.white))
+                }
+            }
+            .shadow(color: .black.opacity(0.3), radius: 16, y: 8)
+            .padding(.top, 16)
+
+            // Cover edit buttons
+            HStack(spacing: 8) {
+                PhotosPicker(selection: $coverPickerItem, matching: .images) {
+                    Label("Upload", systemImage: "arrow.up.circle")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Theme.foreground)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Theme.secondary)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.borderless)
+
+                Button {
+                    coverUrlText = playlist.cover.hasPrefix("http") ? playlist.cover : ""
+                    showCoverUrlInput = true
+                } label: {
+                    Label("URL", systemImage: "link")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Theme.foreground)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Theme.secondary)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.borderless)
+
+                if !playlist.cover.isEmpty {
+                    Button {
+                        playlistManager.updatePlaylistCover(id: playlistId, cover: "")
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12))
+                            .foregroundColor(.red.opacity(0.7))
+                            .padding(5)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+
+            if !coverUploadError.isEmpty {
+                Text(coverUploadError)
+                    .font(.system(size: 12))
+                    .foregroundColor(.red)
+            }
 
             // Title
             Text(playlist.name)
@@ -204,10 +304,17 @@ struct UserPlaylistDetailView: View {
 
     // MARK: - Cover
 
+    private func coverUrl(for cover: String) -> URL? {
+        if cover.hasPrefix("http") {
+            return URL(string: cover)
+        }
+        return MonochromeAPI().getImageUrl(id: cover)
+    }
+
     @ViewBuilder
     private func playlistCover(_ playlist: UserPlaylist) -> some View {
         if !playlist.cover.isEmpty {
-            AsyncImage(url: MonochromeAPI().getImageUrl(id: playlist.cover)) { phase in
+            AsyncImage(url: coverUrl(for: playlist.cover)) { phase in
                 if let image = phase.image {
                     image.resizable().scaledToFill()
                 } else {

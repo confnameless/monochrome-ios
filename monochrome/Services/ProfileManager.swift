@@ -53,6 +53,22 @@ class ProfileManager {
                 profile.privacy.lastfm = (privacyDict["lastfm"] as? String) ?? "public"
             }
 
+            // Parse favorite albums
+            if let favStr = record.favorite_albums,
+               let favData = favStr.data(using: .utf8),
+               let favArray = try? JSONSerialization.jsonObject(with: favData) as? [[String: Any]] {
+                profile.favoriteAlbums = favArray.compactMap { obj in
+                    guard let id = obj["id"] as? String else { return nil }
+                    return FavoriteAlbum(
+                        id: id,
+                        title: obj["title"] as? String ?? "",
+                        artist: obj["artist"] as? String ?? "",
+                        cover: obj["cover"] as? String ?? "",
+                        description: obj["description"] as? String ?? ""
+                    )
+                }
+            }
+
             // Count history items
             if let historyStr = record.history,
                let historyData = historyStr.data(using: .utf8),
@@ -79,6 +95,7 @@ class ProfileManager {
                 "display_name": profile.displayName,
                 "avatar_url": profile.avatarUrl,
                 "banner": profile.banner,
+                "status": profile.status,
                 "about": profile.about,
                 "website": profile.website,
                 "lastfm_username": profile.lastfmUsername
@@ -92,6 +109,15 @@ class ProfileManager {
             if let privacyData = try? JSONSerialization.data(withJSONObject: privacyDict),
                let privacyString = String(data: privacyData, encoding: .utf8) {
                 data["privacy"] = privacyString
+            }
+
+            // Favorite albums as JSON array
+            let favArray = profile.favoriteAlbums.map { album -> [String: String] in
+                ["id": album.id, "title": album.title, "artist": album.artist, "cover": album.cover, "description": album.description]
+            }
+            if let favData = try? JSONSerialization.data(withJSONObject: favArray),
+               let favString = String(data: favData, encoding: .utf8) {
+                data["favorite_albums"] = favString
             }
 
             // Send all fields at once

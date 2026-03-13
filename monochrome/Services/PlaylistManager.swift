@@ -78,6 +78,14 @@ class PlaylistManager {
         syncPlaylistToCloud(userPlaylists[idx])
     }
 
+    func updatePlaylistCover(id: String, cover: String) {
+        guard let idx = userPlaylists.firstIndex(where: { $0.id == id }) else { return }
+        userPlaylists[idx].cover = cover
+        userPlaylists[idx].updatedAt = Date().timeIntervalSince1970 * 1000
+        savePlaylists()
+        syncPlaylistToCloud(userPlaylists[idx])
+    }
+
     func togglePlaylistVisibility(id: String) {
         guard let idx = userPlaylists.firstIndex(where: { $0.id == id }) else { return }
         userPlaylists[idx].isPublic.toggle()
