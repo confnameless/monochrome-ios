@@ -340,7 +340,7 @@ struct LibraryView: View {
                 // Unfoldered playlists
                 ForEach(playlistManager.unfolderedPlaylists()) { playlist in
                     Button(action: { navigationPath.append(playlist) }) {
-                        UserPlaylistRow(playlist: playlist)
+                        UserPlaylistRow(playlist: playlist, playlistManager: playlistManager)
                     }
                     .buttonStyle(.plain)
                 }
@@ -782,6 +782,12 @@ private struct UserPlaylistCard: View {
 
 private struct UserPlaylistRow: View {
     let playlist: UserPlaylist
+    var playlistManager: PlaylistManager? = nil
+
+    private var currentFolderId: String? {
+        guard let pm = playlistManager else { return nil }
+        return pm.userFolders.first { $0.playlists.contains(playlist.id) }?.id
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -809,6 +815,67 @@ private struct UserPlaylistRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .contentShape(Rectangle())
+        .modifier(PlaylistContextMenu(playlist: playlist, playlistManager: playlistManager))
+    }
+}
+
+private struct PlaylistContextMenu: ViewModifier {
+    let playlist: UserPlaylist
+    let playlistManager: PlaylistManager?
+
+    func body(content: Content) -> some View {
+        if let pm = playlistManager {
+            content.contextMenu {
+                // Move to folder submenu
+                if !pm.userFolders.isEmpty {
+                    let currentFolderId = pm.userFolders.first { $0.playlists.contains(playlist.id) }?.id
+                    Menu {
+                        // "No folder" option
+                        Button {
+                            if let fid = currentFolderId {
+                                pm.removePlaylistFromFolder(playlistId: playlist.id, folderId: fid)
+                            }
+                        } label: {
+                            Label("No Folder", systemImage: currentFolderId == nil ? "checkmark" : "")
+                        }
+
+                        ForEach(pm.userFolders) { folder in
+                            Button {
+                                // Remove from current folder first
+                                if let fid = currentFolderId {
+                                    pm.removePlaylistFromFolder(playlistId: playlist.id, folderId: fid)
+                                }
+                                pm.addPlaylistToFolder(playlistId: playlist.id, folderId: folder.id)
+                            } label: {
+                                HStack {
+                                    Text(folder.name)
+                                    if folder.id == currentFolderId {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Move to Folder", systemImage: "folder")
+                    }
+                }
+
+                Button {
+                    pm.togglePlaylistVisibility(id: playlist.id)
+                } label: {
+                    Label(playlist.isPublic ? "Make Private" : "Make Public",
+                          systemImage: playlist.isPublic ? "lock" : "globe")
+                }
+
+                Button(role: .destructive) {
+                    pm.deletePlaylist(id: playlist.id)
+                } label: {
+                    Label("Delete Playlist", systemImage: "trash")
+                }
+            }
+        } else {
+            content
+        }
     }
 }
 
@@ -897,7 +964,7 @@ private struct FolderRow: View {
                 let playlists = playlistManager.playlistsInFolder(folder.id)
                 ForEach(playlists) { playlist in
                     Button(action: { navigationPath.append(playlist) }) {
-                        UserPlaylistRow(playlist: playlist)
+                        UserPlaylistRow(playlist: playlist, playlistManager: playlistManager)
                     }
                     .buttonStyle(.plain)
                     .padding(.leading, 20)
