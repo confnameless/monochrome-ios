@@ -213,8 +213,12 @@ class AudioPlayerService {
             // Prefer local download, fall back to streaming
             var resolvedUrl: URL? = DownloadManager.shared.localURL(for: track.id)
             if resolvedUrl == nil {
-                if let streamUrlStr = try? await MonochromeAPI().fetchStreamUrl(trackId: track.id) {
+                let preferredQuality = SettingsManager.shared.streamQuality
+                if let streamUrlStr = await MonochromeAPI().fetchStreamUrlWithFallback(trackId: track.id, preferredQuality: preferredQuality) {
                     resolvedUrl = URL(string: streamUrlStr)
+                    print("[Audio] Streaming URL: \(streamUrlStr)")
+                } else {
+                    print("[Audio] No stream available for track \(track.id)")
                 }
             }
 
@@ -297,7 +301,8 @@ class AudioPlayerService {
         restoredTimestamp = 0
 
         Task {
-            guard let streamUrlStr = try? await MonochromeAPI().fetchStreamUrl(trackId: track.id),
+            let quality = SettingsManager.shared.streamQuality
+            guard let streamUrlStr = await MonochromeAPI().fetchStreamUrlWithFallback(trackId: track.id, preferredQuality: quality),
                   let url = URL(string: streamUrlStr) else { return }
 
             let asset = AVURLAsset(url: url)
@@ -502,7 +507,8 @@ class AudioPlayerService {
         self.duration = 0
 
         Task {
-            if let streamUrlStr = try? await MonochromeAPI().fetchStreamUrl(trackId: previous.id),
+            let quality = SettingsManager.shared.streamQuality
+            if let streamUrlStr = await MonochromeAPI().fetchStreamUrlWithFallback(trackId: previous.id, preferredQuality: quality),
                let url = URL(string: streamUrlStr) {
 
                 let asset = AVURLAsset(url: url)

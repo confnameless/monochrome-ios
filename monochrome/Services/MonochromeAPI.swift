@@ -447,8 +447,8 @@ class MonochromeAPI {
         return try JSONDecoder().decode(Track.self, from: data)
     }
 
-    func fetchStreamUrl(trackId: Int) async throws -> String? {
-        guard let url = URL(string: "\(baseURL)/track/?id=\(trackId)&quality=HIGH") else { throw URLError(.badURL) }
+    func fetchStreamUrl(trackId: Int, quality: AudioQuality = .high) async throws -> String? {
+        guard let url = URL(string: "\(baseURL)/track/?id=\(trackId)&quality=\(quality.rawValue)") else { throw URLError(.badURL) }
 
         let (data, response) = try await urlSession.data(for: request(for: url))
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
@@ -460,6 +460,36 @@ class MonochromeAPI {
             return nil
         }
         return manifest.urls.first
+    }
+
+    func fetchStreamUrlWithFallback(trackId: Int, preferredQuality: AudioQuality) async -> String? {
+        let fallbackOrder: [AudioQuality] = [
+            preferredQuality,
+            .hiResLossless,
+            .lossless,
+            .high,
+            .medium,
+            .low
+        ]
+
+        var triedQualities: [String] = []
+
+        for quality in fallbackOrder {
+            do {
+                if let urlString = try await fetchStreamUrl(trackId: trackId, quality: quality) {
+                    if preferredQuality != quality {
+                        print("[Audio] Quality \(preferredQuality.rawValue) not available, fell back to \(quality.rawValue)")
+                    }
+                    return urlString
+                }
+            } catch {
+                triedQualities.append(quality.rawValue)
+                print("[Audio] Quality \(quality.rawValue) failed: \(error.localizedDescription)")
+            }
+        }
+
+        print("[Audio] All qualities failed: \(triedQualities)")
+        return nil
     }
 
     // MARK: - Images

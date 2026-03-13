@@ -6,6 +6,7 @@ struct NowPlayingView: View {
 
     @Environment(AudioPlayerService.self) private var audioPlayer
     @Environment(LibraryManager.self) private var libraryManager
+    @Environment(DownloadManager.self) private var downloadManager
     @State private var showQueue = false
 
     // Real screen dimensions — always correct regardless of view hierarchy
@@ -234,8 +235,40 @@ struct NowPlayingView: View {
                         .foregroundColor(libraryManager.isFavorite(trackId: track.id) ? .white : .white.opacity(0.5))
                 }
                 .frame(width: 44, height: 44)
+
+                downloadToggleButton(track: track)
             }
         }
+    }
+
+    @ViewBuilder
+    private func downloadToggleButton(track: Track) -> some View {
+        let isDownloaded = downloadManager.isDownloaded(track.id)
+        let isDownloading = downloadManager.isDownloading(track.id)
+
+        Button(action: {
+            if isDownloaded {
+                downloadManager.removeDownload(track.id)
+            } else if !isDownloading {
+                downloadManager.downloadTrack(track)
+            }
+        }) {
+            if isDownloading {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .scaleEffect(0.8)
+                    .tint(.white)
+            } else if isDownloaded {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(.white)
+            } else {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 22))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+        }
+        .frame(width: 44, height: 44)
     }
 
     // MARK: - Progress

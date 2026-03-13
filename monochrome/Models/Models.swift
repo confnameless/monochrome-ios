@@ -8,6 +8,7 @@ struct Track: Identifiable, Codable, Hashable {
     let album: Album?
     let streamStartDate: String?
     let popularity: Double?
+    let trackNumber: Int?
 
     var releaseYear: String? {
         guard let dateStr = streamStartDate, dateStr.count >= 4 else { return nil }

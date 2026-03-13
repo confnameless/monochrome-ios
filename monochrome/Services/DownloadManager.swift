@@ -29,7 +29,7 @@ class DownloadManager {
 
     init() {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        downloadsDir = docs.appendingPathComponent("MonochromeDownloads", isDirectory: true)
+        downloadsDir = docs.appendingPathComponent("Downloads", isDirectory: true)
         try? FileManager.default.createDirectory(at: downloadsDir, withIntermediateDirectories: true)
         loadManifest()
     }
@@ -75,15 +75,24 @@ class DownloadManager {
 
         Task {
             do {
-                guard let streamUrlStr = try await MonochromeAPI().fetchStreamUrl(trackId: trackId),
+                let downloadQuality = AudioQuality(rawValue: SettingsManager.shared.downloadQuality.rawValue) ?? .hiResLossless
+                guard let streamUrlStr = await MonochromeAPI().fetchStreamUrlWithFallback(trackId: trackId, preferredQuality: downloadQuality),
                       let streamUrl = URL(string: streamUrlStr) else {
                     await MainActor.run { activeDownloads[trackId] = .failed }
                     return
                 }
 
+                print("[Download] Using stream URL: \(streamUrlStr)")
+
                 let ext = streamUrl.pathExtension.isEmpty ? "flac" : streamUrl.pathExtension
-                let fileName = "\(trackId).\(ext)"
-                let destURL = downloadsDir.appendingPathComponent(fileName)
+                let relativePath = SettingsManager.shared.generateFilePath(for: track, extension: ext)
+                let destURL = downloadsDir.appendingPathComponent(relativePath)
+
+                // Create directory structure if needed
+                let destDir = destURL.deletingLastPathComponent()
+                if !FileManager.default.fileExists(atPath: destDir.path) {
+                    try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
+                }
 
                 let (tempURL, response) = try await URLSession.shared.download(from: streamUrl, delegate: ProgressDelegate { progress in
                     Task { @MainActor in
@@ -107,7 +116,7 @@ class DownloadManager {
                     title: track.title,
                     artist: track.artist?.name ?? "",
                     album: track.album?.title ?? "",
-                    fileName: fileName,
+                    fileName: relativePath,
                     downloadedAt: Date().timeIntervalSince1970
                 )
 
@@ -124,7 +133,7 @@ class DownloadManager {
                     }
                 }
 
-                print("[Download] Saved: \(track.title) → \(fileName)")
+                print("[Download] Saved: \(track.title) → \(relativePath)")
             } catch {
                 print("[Download] Error for \(trackId): \(error.localizedDescription)")
                 await MainActor.run { activeDownloads[trackId] = .failed }
@@ -149,10 +158,9 @@ class DownloadManager {
     }
 
     func removeAllDownloads() {
-        for (_, entry) in manifest {
-            let path = downloadsDir.appendingPathComponent(entry.fileName)
-            try? FileManager.default.removeItem(at: path)
-        }
+        // Delete the entire Downloads folder
+        try? FileManager.default.removeItem(at: downloadsDir)
+        try? FileManager.default.createDirectory(at: downloadsDir, withIntermediateDirectories: true)
         manifest.removeAll()
         activeDownloads.removeAll()
         saveManifest()

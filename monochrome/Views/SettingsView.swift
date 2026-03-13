@@ -3,12 +3,18 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     private var cache = CacheService.shared
+    private var settings = SettingsManager.shared
 
     @State private var cacheSize: String = ""
     @State private var cacheEntries: Int = 0
     @State private var showTTLPicker = false
     @State private var showSizePicker = false
     @State private var showClearConfirm = false
+    @State private var showStreamQualityPicker = false
+    @State private var showDownloadQualityPicker = false
+    @State private var showFileNamingPicker = false
+    @State private var showCustomNamingEditor = false
+    @State private var customNamingText = ""
 
     var body: some View {
         NavigationStack {
@@ -16,10 +22,13 @@ struct SettingsView: View {
                 VStack(spacing: 24) {
                     // MARK: - Playback
                     SettingsSection(title: "Playback") {
-                        SettingsRow(icon: "waveform", title: "Audio Quality", value: "High")
-                        SettingsRow(icon: "antenna.radiowaves.left.and.right", title: "Streaming", value: "Wi-Fi + Cellular")
-                        SettingsRow(icon: "speaker.wave.2.fill", title: "Normalisation", value: "On")
+                        SettingsRow(icon: "waveform", title: "Streaming Quality", value: settings.streamQuality.label) {
+                            showStreamQualityPicker = true
+                        }
                     }
+
+                    // MARK: - Downloads
+                    DownloadsSection(settings: settings, showDownloadQualityPicker: $showDownloadQualityPicker, showFileNamingPicker: $showFileNamingPicker, showCustomNamingEditor: $showCustomNamingEditor, customNamingText: $customNamingText)
 
                     // MARK: - Cache
                     SettingsSection(title: "Cache") {
@@ -88,6 +97,41 @@ struct SettingsView: View {
                 }
             }
             .onAppear { refreshCacheStats() }
+            .confirmationDialog("Streaming Quality", isPresented: $showStreamQualityPicker, titleVisibility: .visible) {
+                ForEach(AudioQuality.allCases, id: \.self) { quality in
+                    Button(quality.label + (quality == settings.streamQuality ? " ✓" : "")) {
+                        settings.streamQuality = quality
+                    }
+                }
+            }
+            .confirmationDialog("Download Quality", isPresented: $showDownloadQualityPicker, titleVisibility: .visible) {
+                ForEach(DownloadQuality.allCases, id: \.self) { quality in
+                    Button(quality.label + (quality == settings.downloadQuality ? " ✓" : "")) {
+                        settings.downloadQuality = quality
+                    }
+                }
+            }
+            .confirmationDialog("File Naming", isPresented: $showFileNamingPicker, titleVisibility: .visible) {
+                ForEach(FileNaming.allCases, id: \.self) { naming in
+                    Button(naming.label + (naming == settings.fileNaming ? " ✓" : "")) {
+                        settings.fileNaming = naming
+                    }
+                }
+            }
+            .alert("File Naming Pattern", isPresented: $showCustomNamingEditor) {
+                TextField("Pattern", text: $customNamingText)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") {
+                    let trimmed = customNamingText.trimmingCharacters(in: .whitespaces)
+                    if trimmed.isEmpty {
+                        settings.fileNaming = .flat
+                    } else {
+                        settings.customNamingPattern = trimmed
+                    }
+                }
+            } message: {
+                Text("Available: {artist}, {album}, {title}, {track}\nUse / for folders.\nEmpty = flat.")
+            }
             .confirmationDialog("Cache Duration", isPresented: $showTTLPicker, titleVisibility: .visible) {
                 ForEach(CacheService.ttlOptions, id: \.value) { option in
                     Button(option.label + (option.value == cache.maxAge ? " ✓" : "")) {
@@ -193,6 +237,70 @@ private struct SettingsRow: View {
             .padding(.vertical, 13)
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct DownloadsSection: View {
+    @Bindable var settings: SettingsManager
+    @Binding var showDownloadQualityPicker: Bool
+    @Binding var showFileNamingPicker: Bool
+    @Binding var showCustomNamingEditor: Bool
+    @Binding var customNamingText: String
+    @State private var showDeleteConfirm = false
+
+    var body: some View {
+        SettingsSection(title: "Downloads") {
+            SettingsRow(icon: "arrow.down.circle.fill", title: "Download Quality", value: settings.downloadQuality.label) {
+                showDownloadQualityPicker = true
+            }
+
+            Divider().foregroundColor(Theme.border).padding(.horizontal, 16)
+
+            SettingsRow(icon: "folder.fill", title: "File Naming", value: settings.fileNaming == .flat ? "Flat" : "Custom") {
+                showFileNamingPicker = true
+            }
+
+            if settings.fileNaming == .custom {
+                Divider().foregroundColor(Theme.border).padding(.horizontal, 16)
+                
+                Button(action: {
+                    customNamingText = settings.customNamingPattern
+                    showCustomNamingEditor = true
+                }) {
+                    HStack {
+                        Text("Pattern")
+                            .font(.system(size: 15))
+                            .foregroundColor(Theme.foreground)
+                        Spacer()
+                        Text(settings.customNamingPattern)
+                            .font(.system(size: 13))
+                            .foregroundColor(Theme.mutedForeground)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12))
+                            .foregroundColor(Theme.mutedForeground)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Divider().foregroundColor(Theme.border).padding(.horizontal, 16)
+
+            SettingsRow(icon: "trash.fill", title: "Delete All Downloads", isAction: true) {
+                showDeleteConfirm = true
+            }
+        }
+        .alert("Delete All Downloads", isPresented: $showDeleteConfirm) {
+            Button("Delete", role: .destructive) {
+                DownloadManager.shared.removeAllDownloads()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will delete all downloaded tracks from storage.")
+        }
     }
 }
 
