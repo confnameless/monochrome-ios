@@ -12,6 +12,7 @@ struct SearchView: View {
 
     @State private var isSearching = false
     @State private var hasSearched = false
+    @State private var mediaFilter: MediaFilter = .albums
     @FocusState private var isFocused: Bool
     @State private var keyboardHeight: CGFloat = 0
     @State private var searchHistory: [String] = []
@@ -27,6 +28,41 @@ struct SearchView: View {
 
     private var showSuggestions: Bool {
         isFocused && !suggestions.isEmpty
+    }
+
+    private enum MediaFilter: String, CaseIterable {
+        case albums = "Albums"
+        case singles = "Singles"
+        case playlists = "Playlists"
+        case all = "All"
+    }
+
+    private var filteredAlbums: [Album] {
+        switch mediaFilter {
+        case .albums: return searchAlbums.filter { $0.type?.uppercased() != "SINGLE" }
+        case .singles: return searchAlbums.filter { $0.type?.uppercased() == "SINGLE" }
+        case .all: return searchAlbums
+        case .playlists: return []
+        }
+    }
+
+    private var filteredPlaylists: [Playlist] {
+        mediaFilter == .playlists || mediaFilter == .all ? searchPlaylists : []
+    }
+
+    private var hasMediaContent: Bool {
+        !searchAlbums.isEmpty || !searchPlaylists.isEmpty
+    }
+
+    private var availableFilters: [MediaFilter] {
+        var filters: [MediaFilter] = []
+        let hasAlbums = searchAlbums.contains { $0.type?.uppercased() != "SINGLE" }
+        let hasSingles = searchAlbums.contains { $0.type?.uppercased() == "SINGLE" }
+        if hasAlbums { filters.append(.albums) }
+        if hasSingles { filters.append(.singles) }
+        if !searchPlaylists.isEmpty { filters.append(.playlists) }
+        if filters.count > 1 { filters.append(.all) }
+        return filters
     }
 
     private enum Suggestion: Identifiable {
@@ -118,54 +154,94 @@ struct SearchView: View {
                         .listRowBackground(Color.clear)
                     }
                     
-                    // ALBUMS SECTION
-                    if !searchAlbums.isEmpty {
+                    // ALBUMS / SINGLES / PLAYLISTS SECTION
+                    if hasMediaContent {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Albums")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(Theme.foreground)
-                                .padding(.horizontal, 16)
-                                .padding(.top, 10)
-                            
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                LazyHStack(spacing: 16) {
-                                    ForEach(searchAlbums) { album in
-                                        NavigationLink(value: album) {
-                                            AlbumSearchResultRow(album: album)
+                            // Filter tabs
+                            if availableFilters.count > 1 {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(availableFilters, id: \.self) { filter in
+                                            Button {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    mediaFilter = filter
+                                                }
+                                            } label: {
+                                                Text(filter.rawValue)
+                                                    .font(.system(size: 13, weight: .semibold))
+                                                    .foregroundColor(mediaFilter == filter ? Theme.background : Theme.foreground)
+                                                    .padding(.horizontal, 14)
+                                                    .padding(.vertical, 6)
+                                                    .background(mediaFilter == filter ? Theme.foreground : Theme.secondary)
+                                                    .clipShape(Capsule())
+                                            }
+                                            .buttonStyle(.plain)
                                         }
-                                        .simultaneousGesture(TapGesture().onEnded { isFocused = false })
                                     }
+                                    .padding(.horizontal, 16)
                                 }
-                                .padding(.horizontal, 16)
-                            }
-                            .frame(height: 180)
-                        }
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                    }
-                    
-                    // PLAYLISTS SECTION
-                    if !searchPlaylists.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Playlists")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(Theme.foreground)
-                                .padding(.horizontal, 16)
                                 .padding(.top, 10)
+                            } else {
+                                Text(availableFilters.first?.rawValue ?? "Albums")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(Theme.foreground)
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 10)
+                            }
 
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                LazyHStack(spacing: 16) {
-                                    ForEach(searchPlaylists) { playlist in
-                                        NavigationLink(value: playlist) {
-                                            PlaylistSearchResultRow(playlist: playlist)
+                            if mediaFilter == .all {
+                                // Combined scroll
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    LazyHStack(spacing: 16) {
+                                        ForEach(searchAlbums) { album in
+                                            NavigationLink(value: album) {
+                                                AlbumSearchResultRow(album: album)
+                                            }
+                                            .simultaneousGesture(TapGesture().onEnded { isFocused = false })
                                         }
-                                        .simultaneousGesture(TapGesture().onEnded { isFocused = false })
+                                        ForEach(searchPlaylists) { playlist in
+                                            NavigationLink(value: playlist) {
+                                                PlaylistSearchResultRow(playlist: playlist)
+                                            }
+                                            .simultaneousGesture(TapGesture().onEnded { isFocused = false })
+                                        }
                                     }
+                                    .padding(.horizontal, 16)
                                 }
-                                .padding(.horizontal, 16)
+                                .frame(height: 180)
+                            } else {
+                                // Albums or Singles
+                                if !filteredAlbums.isEmpty {
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        LazyHStack(spacing: 16) {
+                                            ForEach(filteredAlbums) { album in
+                                                NavigationLink(value: album) {
+                                                    AlbumSearchResultRow(album: album)
+                                                }
+                                                .simultaneousGesture(TapGesture().onEnded { isFocused = false })
+                                            }
+                                        }
+                                        .padding(.horizontal, 16)
+                                    }
+                                    .frame(height: 180)
+                                }
+
+                                // Playlists only
+                                if !filteredPlaylists.isEmpty {
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        LazyHStack(spacing: 16) {
+                                            ForEach(filteredPlaylists) { playlist in
+                                                NavigationLink(value: playlist) {
+                                                    PlaylistSearchResultRow(playlist: playlist)
+                                                }
+                                                .simultaneousGesture(TapGesture().onEnded { isFocused = false })
+                                            }
+                                        }
+                                        .padding(.horizontal, 16)
+                                    }
+                                    .frame(height: 180)
+                                }
                             }
-                            .frame(height: 180)
                         }
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets())
@@ -371,6 +447,7 @@ struct SearchView: View {
         isSearching = true
         hasSearched = true
         isFocused = false
+        mediaFilter = .albums
         autocompleteTask?.cancel()
         suggestions = []
         addToHistory(query)
