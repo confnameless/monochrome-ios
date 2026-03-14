@@ -35,6 +35,11 @@ class AudioPlayerService {
     var queueSessionHistoryStart: Int = 0
     var repeatMode: RepeatMode = .off
 
+    @ObservationIgnored
+    private var isRefreshingRecentQualities = false
+    @ObservationIgnored
+    private var qualityFetchAttempts: Set<Int> = []
+
     private var savedQueueForRepeatOne: [Track] = []
     private let restartThreshold: TimeInterval = 3
     private let historyMaxCount = 100
@@ -168,6 +173,82 @@ class AudioPlayerService {
         saveState()
     }
 
+    // MARK: - Quality Backfill (recent history)
+
+    func refreshRecentQualitiesIfNeeded(tracks: [Track]) {
+        guard SettingsManager.shared.showTrackQuality else { return }
+        guard !isRefreshingRecentQualities else { return }
+
+        let uniqueById = Dictionary(tracks.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        let candidates = uniqueById.values.filter {
+            ($0.audioQuality == nil || $0.mediaMetadata?.tags == nil) &&
+            !qualityFetchAttempts.contains($0.id) &&
+            !QualityCache.isCached($0.id)
+        }
+        guard !candidates.isEmpty else { return }
+
+        let limited = Array(candidates.prefix(6))
+        qualityFetchAttempts.formUnion(limited.map { $0.id })
+        isRefreshingRecentQualities = true
+
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            let api = MonochromeAPI()
+            var updates: [Int: Track] = [:]
+            var failedIds: [Int] = []
+
+            await withTaskGroup(of: (Int, Track?).self) { group in
+                var pending = 0
+                for track in limited {
+                    if pending >= 3, let (id, result) = await group.next() {
+                        if let result { updates[id] = result } else { failedIds.append(id) }
+                        pending -= 1
+                    }
+                    group.addTask {
+                        if let fetched = try? await api.fetchTrack(id: track.id),
+                           fetched.audioQuality != nil || fetched.mediaMetadata?.tags != nil {
+                            return (track.id, fetched)
+                        }
+                        let queryParts = [track.title, track.artist?.name].compactMap { $0 }.filter { !$0.isEmpty }
+                        guard !queryParts.isEmpty else { return (track.id, nil) }
+                        if let match = try? await api.searchTracks(query: queryParts.joined(separator: " "))
+                            .first(where: { $0.id == track.id }),
+                           match.audioQuality != nil || match.mediaMetadata?.tags != nil {
+                            return (track.id, match)
+                        }
+                        return (track.id, nil)
+                    }
+                    pending += 1
+                }
+                for await (id, result) in group {
+                    if let result { updates[id] = result } else { failedIds.append(id) }
+                }
+            }
+
+            var cacheEntries: [(id: Int, audioQuality: String?, mediaTags: [String]?)] = []
+            for (id, track) in updates {
+                cacheEntries.append((id, track.audioQuality, track.mediaMetadata?.tags))
+            }
+            for id in failedIds {
+                cacheEntries.append((id, nil, nil))
+            }
+            QualityCache.store(cacheEntries)
+
+            await MainActor.run {
+                defer { self.isRefreshingRecentQualities = false }
+                guard !updates.isEmpty else { return }
+
+                self.playHistory = self.playHistory.map { track in
+                    guard let update = updates[track.id] else { return track }
+                    return track.withUpdatedQuality(from: update)
+                }
+                if let current = self.currentTrack, let update = updates[current.id] {
+                    self.currentTrack = current.withUpdatedQuality(from: update)
+                }
+                self.saveState()
+            }
+        }
+    }
 
     func play(track: Track, queue: [Track] = [], previousTracks: [Track] = []) {
         // Clean up previous observer if any

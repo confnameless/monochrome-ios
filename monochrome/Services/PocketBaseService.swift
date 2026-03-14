@@ -259,6 +259,12 @@ class PocketBaseService {
             "duration": track.duration,
             "addedAt": Int(Date().timeIntervalSince1970 * 1000)
         ]
+        if let audioQuality = track.audioQuality {
+            data["audioQuality"] = audioQuality
+        }
+        if let tags = track.mediaMetadata?.tags, !tags.isEmpty {
+            data["mediaMetadata"] = ["tags": tags]
+        }
         if let artist = track.artist {
             let artistDict: [String: Any] = ["id": artist.id, "name": artist.name]
             data["artist"] = artistDict

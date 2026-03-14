@@ -25,6 +25,10 @@ struct SettingsView: View {
                         SettingsRow(icon: "waveform", title: "Streaming Quality", value: settings.streamQuality.label) {
                             showStreamQualityPicker = true
                         }
+
+                        Divider().foregroundColor(Theme.border).padding(.horizontal, 16)
+
+                        SettingsToggleRow(icon: "waveform.badge.magnifyingglass", title: "Show Track Quality", isOn: Bindable(settings).showTrackQuality)
                     }
 
                     // MARK: - Downloads
@@ -239,6 +243,35 @@ private struct SettingsRow: View {
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
+    }
+}
+
+// MARK: - Settings Toggle Row
+
+private struct SettingsToggleRow: View {
+    let icon: String
+    let title: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15))
+                .foregroundColor(Theme.foreground)
+                .frame(width: 22)
+
+            Text(title)
+                .font(.system(size: 15))
+                .foregroundColor(Theme.foreground)
+
+            Spacer()
+
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .tint(Theme.highlight)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
     }
 }
 

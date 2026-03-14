@@ -88,6 +88,9 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal, 16)
+            .task(id: recentTracks.map { $0.id }) {
+                audioPlayer.refreshRecentQualitiesIfNeeded(tracks: recentTracks)
+            }
         }
     }
 
@@ -157,11 +160,15 @@ struct RecentTrackCard: View {
                 .frame(width: 56, height: 56)
                 .clipped()
 
-                Text(track.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Theme.foreground)
-                    .lineLimit(2)
-                    .padding(.horizontal, 10)
+                HStack(spacing: 4) {
+                    Text(track.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Theme.foreground)
+                        .lineLimit(2)
+
+                    QualityBadge(audioQuality: track.audioQuality, mediaTags: track.mediaMetadata?.tags)
+                }
+                .padding(.horizontal, 10)
 
                 Spacer()
             }

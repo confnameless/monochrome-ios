@@ -76,7 +76,9 @@ struct QueueSheetView: View {
                             artist: track.artist?.name ?? "Unknown Artist",
                             coverUrl: MonochromeAPI().getImageUrl(id: track.album?.cover, size: 80),
                             duration: track.duration,
-                            isPlaying: false
+                            isPlaying: false,
+                            audioQuality: track.audioQuality,
+                            mediaTags: track.mediaMetadata?.tags
                         )
                         .listRowBackground(Theme.background)
                     }
@@ -99,7 +101,9 @@ struct QueueSheetView: View {
                         artist: current.artist?.name ?? "Unknown Artist",
                         coverUrl: MonochromeAPI().getImageUrl(id: current.album?.cover, size: 80),
                         duration: current.duration,
-                        isPlaying: true
+                        isPlaying: true,
+                        audioQuality: current.audioQuality,
+                        mediaTags: current.mediaMetadata?.tags
                     )
                     .listRowBackground(Color.white.opacity(0.05))
                 } header: {
@@ -119,7 +123,9 @@ struct QueueSheetView: View {
                             artist: track.artist?.name ?? "Unknown Artist",
                             coverUrl: MonochromeAPI().getImageUrl(id: track.album?.cover, size: 80),
                             duration: track.duration,
-                            isPlaying: false
+                            isPlaying: false,
+                            audioQuality: track.audioQuality,
+                            mediaTags: track.mediaMetadata?.tags
                         )
                         .listRowBackground(Theme.background)
                         .swipeActions(edge: .trailing) {
@@ -166,7 +172,7 @@ struct QueueSheetView: View {
 
     // MARK: - Row
 
-    private func trackRow(title: String, artist: String, coverUrl: URL?, duration: Int, isPlaying: Bool) -> some View {
+    private func trackRow(title: String, artist: String, coverUrl: URL?, duration: Int, isPlaying: Bool, audioQuality: String? = nil, mediaTags: [String]? = nil) -> some View {
         HStack(spacing: 12) {
             AsyncImage(url: coverUrl) { phase in
                 if let image = phase.image {
@@ -180,10 +186,14 @@ struct QueueSheetView: View {
             .clipShape(RoundedRectangle(cornerRadius: 4))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 15, weight: isPlaying ? .semibold : .regular))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(title)
+                        .font(.system(size: 15, weight: isPlaying ? .semibold : .regular))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    QualityBadge(audioQuality: audioQuality, mediaTags: mediaTags)
+                }
                 Text(artist)
                     .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.5))

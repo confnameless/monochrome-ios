@@ -57,6 +57,7 @@ class SettingsManager {
     private let downloadQualityKey = "settings_download_quality"
     private let fileNamingKey = "settings_file_naming"
     private let customNamingPatternKey = "settings_custom_naming_pattern"
+    private let showTrackQualityKey = "settings_show_track_quality"
 
     var streamQuality: AudioQuality {
         didSet {
@@ -82,6 +83,12 @@ class SettingsManager {
         }
     }
 
+    var showTrackQuality: Bool {
+        didSet {
+            UserDefaults.standard.set(showTrackQuality, forKey: showTrackQualityKey)
+        }
+    }
+
     private init() {
         let savedStream = UserDefaults.standard.string(forKey: streamQualityKey)
         self.streamQuality = AudioQuality(rawValue: savedStream ?? "HIGH") ?? .high
@@ -93,6 +100,7 @@ class SettingsManager {
         self.fileNaming = FileNaming(rawValue: savedNaming ?? "CUSTOM") ?? .custom
 
         self.customNamingPattern = UserDefaults.standard.string(forKey: customNamingPatternKey) ?? "{artist}/{album}/{artist} - {title}"
+        self.showTrackQuality = UserDefaults.standard.bool(forKey: showTrackQualityKey)
     }
 
     func sanitizeFileName(_ name: String) -> String {

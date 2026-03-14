@@ -39,10 +39,14 @@ struct TrackRow: View {
 
             // Track info
             VStack(alignment: .leading, spacing: 3) {
-                Text(track.title)
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(isCurrentTrack ? Theme.highlight : Theme.foreground)
-                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(track.title)
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(isCurrentTrack ? Theme.highlight : Theme.foreground)
+                        .lineLimit(1)
+
+                    QualityBadge(audioQuality: track.audioQuality, mediaTags: track.mediaMetadata?.tags)
+                }
 
                 HStack(spacing: 4) {
                     if isCurrentTrack && audioPlayer.isPlaying {
@@ -428,5 +432,47 @@ struct OptionRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Quality Badge
+
+struct QualityBadge: View {
+    let audioQuality: String?
+    var mediaTags: [String]? = nil
+
+    private static let qualityLevel: [String: Int] = [
+        "LOW": 0, "MEDIUM": 1, "HIGH": 2, "LOSSLESS": 3,
+        "HI_RES_LOSSLESS": 4, "HI_RES": 4, "HIRES_LOSSLESS": 4, "HIRES": 4
+    ]
+
+    private static let labels = ["128k", "256k", "320k", "Lossless", "Hi-Res"]
+
+    private static let hiResTags: Set<String> = [
+        "HIRES_LOSSLESS", "HI_RES_LOSSLESS", "HIRES", "HI_RES"
+    ]
+
+    private var effectiveLabel: String? {
+        guard SettingsManager.shared.showTrackQuality,
+              let trackQ = audioQuality,
+              let trackLevel = Self.qualityLevel[trackQ] else { return nil }
+        let streamLevel = Self.qualityLevel[SettingsManager.shared.streamQuality.rawValue] ?? 2
+        let normalizedTags = Set((mediaTags ?? []).map { $0.uppercased() })
+        let isHiResTagged = !normalizedTags.isEmpty && !Self.hiResTags.isDisjoint(with: normalizedTags)
+        let hiResLevel = Self.qualityLevel["HI_RES_LOSSLESS"] ?? trackLevel
+        let effectiveTrackLevel = isHiResTagged ? max(trackLevel, hiResLevel) : trackLevel
+        return Self.labels[min(effectiveTrackLevel, streamLevel)]
+    }
+
+    var body: some View {
+        if let label = effectiveLabel {
+            Text(label)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(Theme.background)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(Theme.mutedForeground.opacity(0.7))
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+        }
     }
 }
