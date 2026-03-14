@@ -694,8 +694,9 @@ class AudioPlayerService {
             let historyTracks = try await PocketBaseService.shared.fetchHistory(uid: uid)
             guard !historyTracks.isEmpty else { return }
             await MainActor.run {
-                self.playHistory = historyTracks
-                self.queueSessionHistoryStart = historyTracks.count
+                let orderedHistory = Array(historyTracks.reversed())
+                self.playHistory = orderedHistory
+                self.queueSessionHistoryStart = orderedHistory.count
                 self.saveState()
             }
         } catch {

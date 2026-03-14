@@ -60,16 +60,16 @@ struct SettingsView: View {
 
                     // MARK: - Appearance
                     SettingsSection(title: "Appearance") {
-                        SettingsRow(icon: "paintbrush.fill", title: "Theme", value: "Dark")
-                        SettingsRow(icon: "textformat.size", title: "Text Size", value: "Default")
+                        SettingsRow(icon: "paintbrush.fill", title: "Theme", value: "Coming soon...", isDisabled: true)
+                        SettingsRow(icon: "textformat.size", title: "Text Size", value: "Coming soon...", isDisabled: true)
                     }
 
                     // MARK: - About
                     SettingsSection(title: "About") {
                         SettingsRow(icon: "info.circle.fill", title: "Version", value: appVersion, showChevron: false)
-                        SettingsRow(icon: "doc.text.fill", title: "Terms of Service")
-                        SettingsRow(icon: "hand.raised.fill", title: "Privacy Policy")
-                        SettingsRow(icon: "envelope.fill", title: "Contact Us")
+                        SettingsRow(icon: "doc.text.fill", title: "Terms of Service", value: "Coming soon...", isDisabled: true)
+                        SettingsRow(icon: "hand.raised.fill", title: "Privacy Policy", value: "Coming soon...", isDisabled: true)
+                        SettingsRow(icon: "envelope.fill", title: "Contact Us", value: "Coming soon...", isDisabled: true)
                     }
 
                     Spacer(minLength: 40)
@@ -203,6 +203,7 @@ private struct SettingsRow: View {
     var value: String? = nil
     var isAction: Bool = false
     var showChevron: Bool = true
+    var isDisabled: Bool = false
     var action: (() -> Void)? = nil
 
     var body: some View {
@@ -212,22 +213,22 @@ private struct SettingsRow: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 15))
-                    .foregroundColor(isAction ? .red : Theme.foreground)
+                    .foregroundColor(isAction ? .red : (isDisabled ? Theme.mutedForeground : Theme.foreground))
                     .frame(width: 22)
 
                 Text(title)
                     .font(.system(size: 15))
-                    .foregroundColor(isAction ? .red : Theme.foreground)
+                    .foregroundColor(isAction ? .red : (isDisabled ? Theme.mutedForeground : Theme.foreground))
 
                 Spacer()
 
                 if let value {
                     Text(value)
                         .font(.system(size: 14))
-                        .foregroundColor(Theme.mutedForeground)
+                        .foregroundColor(isDisabled ? Theme.mutedForeground.opacity(0.7) : Theme.mutedForeground)
                 }
 
-                if showChevron && !isAction {
+                if showChevron && !isAction && !isDisabled {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(Theme.mutedForeground.opacity(0.5))
@@ -237,6 +238,7 @@ private struct SettingsRow: View {
             .padding(.vertical, 13)
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
     }
 }
 
