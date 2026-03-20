@@ -604,8 +604,7 @@ struct ArtistDetailView: View {
         if let age = cache.age(forKey: "artist_\(artist.id)"),
            age < cache.maxAge,
            let detail = artistDetail,
-           !detail.topTracks.isEmpty,
-           !detail.topTracks.contains(where: { $0.audioQuality == nil && !QualityCache.isCached($0.id) }) {
+           !detail.topTracks.isEmpty {
             return
         }
 

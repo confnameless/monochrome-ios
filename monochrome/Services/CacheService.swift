@@ -112,10 +112,10 @@ class CacheService {
 
     // MARK: - Get
 
-    func get<T: Codable>(forKey key: String) -> T? {
+    func get<T: Codable>(forKey key: String, ignoreExpiry: Bool = false) -> T? {
         // Memory check
         if let entry = memory[key] {
-            if Date().timeIntervalSince(entry.timestamp) < maxAge {
+            if ignoreExpiry || Date().timeIntervalSince(entry.timestamp) < maxAge {
                 if let decoded: T = try? decoder.decode(T.self, from: entry.data) {
                     return decoded
                 }
@@ -133,7 +133,7 @@ class CacheService {
             return nil
         }
 
-        if Date().timeIntervalSince(diskEntry.timestamp) >= maxAge {
+        if !ignoreExpiry && Date().timeIntervalSince(diskEntry.timestamp) >= maxAge {
             try? FileManager.default.removeItem(at: file)
             return nil
         }

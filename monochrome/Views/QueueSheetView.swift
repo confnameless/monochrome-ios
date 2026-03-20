@@ -77,7 +77,6 @@ struct QueueSheetView: View {
                             coverUrl: MonochromeAPI().getImageUrl(id: track.album?.cover, size: 80),
                             duration: track.duration,
                             isPlaying: false,
-                            audioQuality: track.audioQuality,
                             mediaTags: track.mediaMetadata?.tags
                         )
                         .listRowBackground(Theme.background)
@@ -102,7 +101,6 @@ struct QueueSheetView: View {
                         coverUrl: MonochromeAPI().getImageUrl(id: current.album?.cover, size: 80),
                         duration: current.duration,
                         isPlaying: true,
-                        audioQuality: current.audioQuality,
                         mediaTags: current.mediaMetadata?.tags
                     )
                     .listRowBackground(Color.white.opacity(0.05))
@@ -124,7 +122,6 @@ struct QueueSheetView: View {
                             coverUrl: MonochromeAPI().getImageUrl(id: track.album?.cover, size: 80),
                             duration: track.duration,
                             isPlaying: false,
-                            audioQuality: track.audioQuality,
                             mediaTags: track.mediaMetadata?.tags
                         )
                         .listRowBackground(Theme.background)
@@ -172,7 +169,7 @@ struct QueueSheetView: View {
 
     // MARK: - Row
 
-    private func trackRow(title: String, artist: String, coverUrl: URL?, duration: Int, isPlaying: Bool, audioQuality: String? = nil, mediaTags: [String]? = nil) -> some View {
+    private func trackRow(title: String, artist: String, coverUrl: URL?, duration: Int, isPlaying: Bool, mediaTags: [String]? = nil) -> some View {
         HStack(spacing: 12) {
             CachedAsyncImage(url: coverUrl) { phase in
                 if let image = phase.image {
@@ -192,7 +189,7 @@ struct QueueSheetView: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
 
-                    QualityBadge(audioQuality: audioQuality, mediaTags: mediaTags)
+                    QualityBadge(tags: mediaTags)
                 }
                 Text(artist)
                     .font(.system(size: 13))

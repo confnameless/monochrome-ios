@@ -45,7 +45,7 @@ struct TrackRow: View {
                         .foregroundColor(isCurrentTrack ? Theme.highlight : Theme.foreground)
                         .lineLimit(1)
 
-                    QualityBadge(audioQuality: track.audioQuality, mediaTags: track.mediaMetadata?.tags)
+                    QualityBadge(tags: track.mediaMetadata?.tags)
                 }
 
                 HStack(spacing: 4) {
@@ -438,41 +438,19 @@ struct OptionRow: View {
 // MARK: - Quality Badge
 
 struct QualityBadge: View {
-    let audioQuality: String?
-    var mediaTags: [String]? = nil
+    let tags: [String]?
 
-    private static let qualityLevel: [String: Int] = [
-        "LOW": 0, "MEDIUM": 1, "HIGH": 2, "LOSSLESS": 3,
-        "HI_RES_LOSSLESS": 4, "HI_RES": 4, "HIRES_LOSSLESS": 4, "HIRES": 4
-    ]
-
-    private static let labels = ["128k", "256k", "320k", "Lossless", "Hi-Res"]
-
-    private static let hiResTags: Set<String> = [
-        "HIRES_LOSSLESS", "HI_RES_LOSSLESS", "HIRES", "HI_RES"
-    ]
-
-    private var effectiveLabel: String? {
+    private var label: String? {
         guard SettingsManager.shared.showTrackQuality,
-              let trackQ = audioQuality,
-              let trackLevel = Self.qualityLevel[trackQ] else { return nil }
-
-        let normalizedTags = Set((mediaTags ?? []).map { $0.uppercased() })
-
-        // Dolby Atmos reports audioQuality "LOW" but is actually high quality spatial audio
-        if normalizedTags.contains("DOLBY_ATMOS") {
-            return "Atmos"
-        }
-
-        let streamLevel = Self.qualityLevel[SettingsManager.shared.streamQuality.rawValue] ?? 2
-        let isHiResTagged = !normalizedTags.isEmpty && !Self.hiResTags.isDisjoint(with: normalizedTags)
-        let hiResLevel = Self.qualityLevel["HI_RES_LOSSLESS"] ?? trackLevel
-        let effectiveTrackLevel = isHiResTagged ? max(trackLevel, hiResLevel) : trackLevel
-        return Self.labels[min(effectiveTrackLevel, streamLevel)]
+              let tags = tags, !tags.isEmpty else { return nil }
+        let upper = Set(tags.map { $0.uppercased() })
+        if upper.contains("DOLBY_ATMOS") { return "Atmos" }
+        if upper.contains("HI_RES_LOSSLESS") || upper.contains("HI_RES") || upper.contains("HIRES_LOSSLESS") { return "Hi-Res" }
+        return nil
     }
 
     var body: some View {
-        if let label = effectiveLabel {
+        if let label {
             Text(label)
                 .font(.system(size: 9, weight: .bold))
                 .foregroundColor(Theme.background)
@@ -480,6 +458,7 @@ struct QualityBadge: View {
                 .padding(.vertical, 1)
                 .background(Theme.mutedForeground.opacity(0.7))
                 .clipShape(RoundedRectangle(cornerRadius: 3))
+                .fixedSize()
         }
     }
 }

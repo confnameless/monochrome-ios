@@ -17,9 +17,6 @@ class LibraryManager {
     private let playlistsKey = "monochrome_favorite_playlists"
     private let mixesKey = "monochrome_favorite_mixes"
 
-    @ObservationIgnored
-    private var isRefreshingTrackQualities = false
-
     init() {
         loadFavorites()
     }
@@ -46,71 +43,6 @@ class LibraryManager {
             favoriteMixes = items
         }
 
-        refreshMissingTrackQualities()
-    }
-
-    private func refreshMissingTrackQualities() {
-        guard !isRefreshingTrackQualities else { return }
-        let missingTracks = favoriteTracks.filter {
-            $0.audioQuality == nil && !QualityCache.isCached($0.id)
-        }
-        guard !missingTracks.isEmpty else { return }
-
-        isRefreshingTrackQualities = true
-
-        Task.detached(priority: .utility) { [weak self] in
-            guard let self else { return }
-            let api = MonochromeAPI()
-            var updates: [Int: Track] = [:]
-            var failedIds: [Int] = []
-
-            await withTaskGroup(of: (Int, Track?).self) { group in
-                var pending = 0
-                for track in missingTracks {
-                    if pending >= 3, let (id, result) = await group.next() {
-                        if let result { updates[id] = result } else { failedIds.append(id) }
-                        pending -= 1
-                    }
-                    group.addTask {
-                        // Use the proxy to check actual available quality (Tidal v1 metadata is unreliable)
-                        if let quality = await api.fetchBestAvailableQuality(trackId: track.id) {
-                            let updated = track.withQuality(quality)
-                            return (track.id, updated)
-                        }
-                        return (track.id, nil)
-                    }
-                    pending += 1
-                }
-                for await (id, result) in group {
-                    if let result { updates[id] = result } else { failedIds.append(id) }
-                }
-            }
-
-            var cacheEntries: [(id: Int, audioQuality: String?, mediaTags: [String]?)] = []
-            for (id, track) in updates {
-                cacheEntries.append((id, track.audioQuality, track.mediaMetadata?.tags))
-            }
-            for id in failedIds {
-                cacheEntries.append((id, nil, nil))
-            }
-            QualityCache.store(cacheEntries)
-
-            await MainActor.run {
-                defer { self.isRefreshingTrackQualities = false }
-                guard !updates.isEmpty else { return }
-
-                self.favoriteTracks = self.favoriteTracks.map { track in
-                    guard track.audioQuality == nil,
-                          let update = updates[track.id] else { return track }
-                    return track.withUpdatedQuality(from: update)
-                }
-                self.saveTracks()
-
-                for track in self.favoriteTracks where updates[track.id] != nil {
-                    self.syncItemInBackground(type: "track", track: track, added: true)
-                }
-            }
-        }
     }
 
     // MARK: - Save
@@ -252,7 +184,6 @@ class LibraryManager {
 
             favoriteTracks = mergedTracks
             saveTracks()
-            refreshMissingTrackQualities()
 
             favoriteAlbums = cloud.albums
             saveAlbums()

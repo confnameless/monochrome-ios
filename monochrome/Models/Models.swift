@@ -9,6 +9,7 @@ struct Track: Identifiable, Codable, Hashable {
     let streamStartDate: String?
     let popularity: Double?
     let trackNumber: Int?
+    let volumeNumber: Int?
     let audioQuality: String?
     let mediaMetadata: MediaMetadata?
 
@@ -25,73 +26,12 @@ struct MediaMetadata: Codable, Hashable {
     let tags: [String]?
 }
 
-struct TrackQualityEntry: Codable {
-    let audioQuality: String?
-    let mediaTags: [String]?
-    let fetchedAt: TimeInterval
-}
-
-enum QualityCache {
-    private static let key = "monochrome_track_quality_cache"
-
-    static func get(_ trackId: Int) -> TrackQualityEntry? {
-        let dict = loadAll()
-        return dict[String(trackId)]
-    }
-
-    static func isCached(_ trackId: Int) -> Bool {
-        get(trackId) != nil
-    }
-
-    static func clearAll() {
-        UserDefaults.standard.removeObject(forKey: key)
-    }
-
-    static func store(_ entries: [(id: Int, audioQuality: String?, mediaTags: [String]?)]) {
-        guard !entries.isEmpty else { return }
-        var dict = loadAll()
-        let now = Date().timeIntervalSince1970
-        for entry in entries {
-            dict[String(entry.id)] = TrackQualityEntry(
-                audioQuality: entry.audioQuality,
-                mediaTags: entry.mediaTags,
-                fetchedAt: now
-            )
-        }
-        save(dict)
-    }
-
-    private static func loadAll() -> [String: TrackQualityEntry] {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let dict = try? JSONDecoder().decode([String: TrackQualityEntry].self, from: data) else { return [:] }
-        let maxAge = CacheService.shared.maxAge
-        let now = Date().timeIntervalSince1970
-        return dict.filter { now - $0.value.fetchedAt < maxAge }
-    }
-
-    private static func save(_ dict: [String: TrackQualityEntry]) {
-        let maxAge = CacheService.shared.maxAge
-        let now = Date().timeIntervalSince1970
-        let pruned = dict.filter { now - $0.value.fetchedAt < maxAge }
-        if let data = try? JSONEncoder().encode(pruned) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
-    }
-}
-
 extension Track {
-    func withUpdatedQuality(from source: Track) -> Track {
-        Track(id: id, title: title, duration: duration, artist: artist,
-              album: album, streamStartDate: streamStartDate,
-              popularity: popularity, trackNumber: trackNumber,
-              audioQuality: source.audioQuality ?? audioQuality,
-              mediaMetadata: source.mediaMetadata ?? mediaMetadata)
-    }
-
     func withQuality(_ quality: String, mediaMetadata: MediaMetadata? = nil) -> Track {
         Track(id: id, title: title, duration: duration, artist: artist,
               album: album, streamStartDate: streamStartDate,
               popularity: popularity, trackNumber: trackNumber,
+              volumeNumber: volumeNumber,
               audioQuality: quality,
               mediaMetadata: mediaMetadata ?? self.mediaMetadata)
     }

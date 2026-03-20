@@ -163,19 +163,61 @@ struct AlbumDetailView: View {
 
     // MARK: - Track List
 
+    private var isMultiDisc: Bool {
+        let volumes = Set(tracks.compactMap(\.volumeNumber))
+        return volumes.count > 1
+    }
+
     @ViewBuilder
     private var trackList: some View {
-        ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-            let queue = Array(tracks.dropFirst(index + 1))
-            let previous = Array(tracks.prefix(index))
-            TrackRow(
-                track: track, queue: queue, previousTracks: previous,
-                showCover: false, showIndex: index + 1,
-                navigationPath: $navigationPath
-            )
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
+        if isMultiDisc {
+            let grouped = Dictionary(grouping: tracks) { $0.volumeNumber ?? 1 }
+            let sortedVolumes = grouped.keys.sorted()
+            ForEach(sortedVolumes, id: \.self) { volume in
+                let volumeTracks = grouped[volume] ?? []
+
+                // Disc header
+                HStack(spacing: 6) {
+                    Image(systemName: "opticaldisc.fill")
+                        .font(.system(size: 12))
+                    Text("Disc \(volume)")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundColor(Theme.mutedForeground)
+                .padding(.horizontal, 16)
+                .padding(.top, volume == sortedVolumes.first ? 4 : 16)
+                .padding(.bottom, 4)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+
+                ForEach(Array(volumeTracks.enumerated()), id: \.element.id) { index, track in
+                    let globalIndex = tracks.firstIndex(where: { $0.id == track.id }) ?? index
+                    let queue = Array(tracks.dropFirst(globalIndex + 1))
+                    let previous = Array(tracks.prefix(globalIndex))
+                    TrackRow(
+                        track: track, queue: queue, previousTracks: previous,
+                        showCover: false, showIndex: track.trackNumber ?? (index + 1),
+                        navigationPath: $navigationPath
+                    )
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                }
+            }
+        } else {
+            ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                let queue = Array(tracks.dropFirst(index + 1))
+                let previous = Array(tracks.prefix(index))
+                TrackRow(
+                    track: track, queue: queue, previousTracks: previous,
+                    showCover: false, showIndex: track.trackNumber ?? (index + 1),
+                    navigationPath: $navigationPath
+                )
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
         }
     }
 
@@ -227,13 +269,30 @@ struct AlbumDetailView: View {
             return
         }
 
-        // Phase 3: refresh from network
-        do {
-            let detail = try await MonochromeAPI().fetchAlbum(id: album.id)
-            loadedAlbum = detail.album
-            tracks = detail.tracks
-        } catch {
-            if loadedAlbum == nil { print("Error loading album: \(error)") }
+        // Phase 3: refresh from network (retry up to 3 times with backoff)
+        let api = MonochromeAPI()
+        var lastError: Error?
+        for attempt in 0..<3 {
+            do {
+                if attempt > 0 {
+                    try await Task.sleep(nanoseconds: UInt64(attempt) * 1_500_000_000)
+                }
+                let detail = try await api.fetchAlbum(id: album.id)
+                loadedAlbum = detail.album
+                tracks = detail.tracks
+                lastError = nil
+                break
+            } catch {
+                lastError = error
+                print("[Album] Attempt \(attempt + 1) failed for album \(album.id): \(error.localizedDescription)")
+            }
+        }
+        if let error = lastError {
+            if tracks.isEmpty, let stale: AlbumDetail = CacheService.shared.get(forKey: cacheKey, ignoreExpiry: true) {
+                loadedAlbum = stale.album
+                tracks = stale.tracks
+            }
+            if tracks.isEmpty { print("[Album] All retries failed for album \(album.id): \(error.localizedDescription)") }
         }
         isLoading = false
     }

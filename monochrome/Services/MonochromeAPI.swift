@@ -357,9 +357,9 @@ class MonochromeAPI {
     func fetchAlbum(id: Int) async throws -> AlbumDetail {
         let cacheKey = "album_\(id)"
 
-        guard let url = URL(string: "\(baseURL)/album/?id=\(id)") else { throw URLError(.badURL) }
+        guard let firstUrl = URL(string: "\(baseURL)/album/?id=\(id)") else { throw URLError(.badURL) }
 
-        let (data, response) = try await urlSession.data(for: request(for: url))
+        let (data, response) = try await urlSession.data(for: request(for: firstUrl))
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -387,6 +387,30 @@ class MonochromeAPI {
             // If no album metadata, extract from first track
             if album == nil, let firstTrack = tracks.first?.album {
                 album = firstTrack
+            }
+        }
+
+        // Paginate if the album has more tracks than returned
+        let totalTracks = (root["numberOfTracks"] as? Int) ?? tracks.count
+        if tracks.count < totalTracks {
+            var offset = tracks.count
+            while offset < totalTracks {
+                guard let pageUrl = URL(string: "\(baseURL)/album/?id=\(id)&offset=\(offset)") else { break }
+                guard let (pageData, pageResp) = try? await urlSession.data(for: request(for: pageUrl)),
+                      (pageResp as? HTTPURLResponse)?.statusCode == 200 else { break }
+
+                guard let pageJson = try? JSONSerialization.jsonObject(with: pageData) as? [String: Any],
+                      let pageRoot = pageJson["data"] as? [String: Any],
+                      let pageItems = pageRoot["items"] as? [[String: Any]], !pageItems.isEmpty else { break }
+
+                for item in pageItems {
+                    let trackObj = item["item"] as? [String: Any] ?? item
+                    if let trackData = try? JSONSerialization.data(withJSONObject: trackObj),
+                       let track = try? JSONDecoder().decode(Track.self, from: trackData) {
+                        tracks.append(track)
+                    }
+                }
+                offset = tracks.count
             }
         }
 
@@ -510,26 +534,6 @@ class MonochromeAPI {
         }
 
         print("[Audio] All qualities failed: \(triedQualities)")
-        return nil
-    }
-
-    /// Check the best available quality for a track via the proxy (top-down from user's stream setting).
-    /// Returns the quality raw value (e.g. "HI_RES_LOSSLESS", "LOSSLESS", "HIGH") or nil.
-    func fetchBestAvailableQuality(trackId: Int) async -> String? {
-        let streamQuality = SettingsManager.shared.streamQuality
-        let allDescending: [AudioQuality] = [.hiResLossless, .lossless, .high]
-        let startIndex = allDescending.firstIndex(of: streamQuality) ?? 0
-        let toTry = Array(allDescending.dropFirst(startIndex))
-
-        for quality in toTry {
-            do {
-                if let _ = try await fetchStreamUrl(trackId: trackId, quality: quality) {
-                    return quality.rawValue
-                }
-            } catch {
-                continue
-            }
-        }
         return nil
     }
 
