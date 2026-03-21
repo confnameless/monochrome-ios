@@ -5,34 +5,180 @@ import Combine
 import UIKit
 import SwiftUI
 
+#if canImport(Observation)
+import Observation
+#endif
+
 enum RepeatMode: Int, Codable {
     case off = 0
     case all = 1
     case one = 2
 }
 
-class AudioPlayerService: ObservableObject {
-    @Published var player: AVQueuePlayer?
-    @Published var isPlaying: Bool = false
-    @Published var currentTrackTitle: String = "No Track"
-    @Published var currentArtistName: String = "Unknown Artist"
-    @Published var currentAlbumTitle: String = ""
-    @Published var currentCoverUrl: URL? = nil
-    @Published var currentTrack: Track? = nil
-
-    // Playback state
+/// Lightweight object for playback progress on iOS 16-.
+/// On iOS 17+, SwiftUI uses Observable tracking on AudioPlayerService directly,
+/// so this object is still updated but less critical for UI performance.
+class PlaybackProgress: ObservableObject {
     @Published var currentTime: TimeInterval = 0
     @Published var duration: TimeInterval = 0
+}
+
+class AudioPlayerService: ObservableObject {
+
+    // MARK: - Observation (iOS 17+ fine-grained tracking)
+
+    #if canImport(Observation)
+    private var _observationRegistrar: Any? = nil
+
+    @available(iOS 17.0, *)
+    private func _access<T>(_ keyPath: KeyPath<AudioPlayerService, T>) {
+        if _observationRegistrar == nil { _observationRegistrar = ObservationRegistrar() }
+        (_observationRegistrar as! ObservationRegistrar).access(self, keyPath: keyPath)
+    }
+
+    @available(iOS 17.0, *)
+    private func _withMutation<T>(_ keyPath: KeyPath<AudioPlayerService, T>, _ body: () -> Void) {
+        if _observationRegistrar == nil { _observationRegistrar = ObservationRegistrar() }
+        (_observationRegistrar as! ObservationRegistrar).withMutation(of: self, keyPath: keyPath, body)
+    }
+    #endif
+
+    /// On iOS 17+: registers property access with ObservationRegistrar (fine-grained).
+    /// On iOS 16-: no-op (objectWillChange handles it coarsely).
+    private func observeAccess<T>(_ keyPath: KeyPath<AudioPlayerService, T>) {
+        #if canImport(Observation)
+        if #available(iOS 17.0, *) { _access(keyPath) }
+        #endif
+    }
+
+    /// On iOS 17+: wraps mutation with ObservationRegistrar (fine-grained).
+    /// On iOS 16-: sends objectWillChange (coarse, all observers re-render).
+    private func observeMutation<T>(_ keyPath: KeyPath<AudioPlayerService, T>, _ body: () -> Void) {
+        #if canImport(Observation)
+        if #available(iOS 17.0, *) {
+            _withMutation(keyPath, body)
+            return
+        }
+        #endif
+        objectWillChange.send()
+        body()
+    }
+
+    // MARK: - Player state (dual-observed)
+
+    var player: AVQueuePlayer? = nil
+
+    private var _isPlaying: Bool = false
+    var isPlaying: Bool {
+        get { observeAccess(\.isPlaying); return _isPlaying }
+        set { observeMutation(\.isPlaying) { _isPlaying = newValue } }
+    }
+
+    private var _currentTrackTitle: String = "No Track"
+    var currentTrackTitle: String {
+        get { observeAccess(\.currentTrackTitle); return _currentTrackTitle }
+        set { observeMutation(\.currentTrackTitle) { _currentTrackTitle = newValue } }
+    }
+
+    private var _currentArtistName: String = "Unknown Artist"
+    var currentArtistName: String {
+        get { observeAccess(\.currentArtistName); return _currentArtistName }
+        set { observeMutation(\.currentArtistName) { _currentArtistName = newValue } }
+    }
+
+    private var _currentAlbumTitle: String = ""
+    var currentAlbumTitle: String {
+        get { observeAccess(\.currentAlbumTitle); return _currentAlbumTitle }
+        set { observeMutation(\.currentAlbumTitle) { _currentAlbumTitle = newValue } }
+    }
+
+    private var _currentCoverUrl: URL? = nil
+    var currentCoverUrl: URL? {
+        get { observeAccess(\.currentCoverUrl); return _currentCoverUrl }
+        set { observeMutation(\.currentCoverUrl) { _currentCoverUrl = newValue } }
+    }
+
+    private var _currentTrack: Track? = nil
+    var currentTrack: Track? {
+        get { observeAccess(\.currentTrack); return _currentTrack }
+        set { observeMutation(\.currentTrack) { _currentTrack = newValue } }
+    }
+
+    // MARK: - Playback progress
+    // On iOS 17+: Observable tracking gives fine-grained updates (only time-showing views re-render).
+    // On iOS 16-: PlaybackProgress (separate ObservableObject) prevents the cascade to all views.
+
+    let playbackProgress = PlaybackProgress()
+
+    var currentTime: TimeInterval {
+        get {
+            observeAccess(\.currentTime)
+            return playbackProgress.currentTime
+        }
+        set {
+            #if canImport(Observation)
+            if #available(iOS 17.0, *) {
+                _withMutation(\.currentTime) { playbackProgress.currentTime = newValue }
+                return
+            }
+            #endif
+            // iOS 16-: only PlaybackProgress publishes (no objectWillChange on AudioPlayerService)
+            playbackProgress.currentTime = newValue
+        }
+    }
+
+    var duration: TimeInterval {
+        get {
+            observeAccess(\.duration)
+            return playbackProgress.duration
+        }
+        set {
+            #if canImport(Observation)
+            if #available(iOS 17.0, *) {
+                _withMutation(\.duration) { playbackProgress.duration = newValue }
+                return
+            }
+            #endif
+            playbackProgress.duration = newValue
+        }
+    }
+
     private var timeObserverToken: Any?
     private var nowPlayingArtwork: MPMediaItemArtwork?
 
-    // Queue support
-    @Published var queuedTracks: [Track] = []
-    @Published var playHistory: [Track] = []
-    @Published var isShuffled: Bool = false
+    // MARK: - Queue support (dual-observed)
+
+    private var _queuedTracks: [Track] = []
+    var queuedTracks: [Track] {
+        get { observeAccess(\.queuedTracks); return _queuedTracks }
+        set { observeMutation(\.queuedTracks) { _queuedTracks = newValue } }
+    }
+
+    private var _playHistory: [Track] = []
+    var playHistory: [Track] {
+        get { observeAccess(\.playHistory); return _playHistory }
+        set { observeMutation(\.playHistory) { _playHistory = newValue } }
+    }
+
+    private var _isShuffled: Bool = false
+    var isShuffled: Bool {
+        get { observeAccess(\.isShuffled); return _isShuffled }
+        set { observeMutation(\.isShuffled) { _isShuffled = newValue } }
+    }
+
     private var originalQueue: [Track] = []
-    @Published var queueSessionHistoryStart: Int = 0
-    @Published var repeatMode: RepeatMode = .off
+
+    private var _queueSessionHistoryStart: Int = 0
+    var queueSessionHistoryStart: Int {
+        get { observeAccess(\.queueSessionHistoryStart); return _queueSessionHistoryStart }
+        set { observeMutation(\.queueSessionHistoryStart) { _queueSessionHistoryStart = newValue } }
+    }
+
+    private var _repeatMode: RepeatMode = .off
+    var repeatMode: RepeatMode {
+        get { observeAccess(\.repeatMode); return _repeatMode }
+        set { observeMutation(\.repeatMode) { _repeatMode = newValue } }
+    }
 
     private var savedQueueForRepeatOne: [Track] = []
     private let restartThreshold: TimeInterval = 3
@@ -637,25 +783,25 @@ class AudioPlayerService: ObservableObject {
         // Restore play history
         if let data = UserDefaults.standard.data(forKey: playHistoryKey),
            let tracks = try? JSONDecoder().decode([Track].self, from: data) {
-            self.playHistory = tracks
+            self._playHistory = tracks
         }
-        self.queueSessionHistoryStart = min(
+        self._queueSessionHistoryStart = min(
             UserDefaults.standard.integer(forKey: queueSessionHistoryStartKey),
-            self.playHistory.count
+            self._playHistory.count
         )
 
         // Restore queue and shuffle state
         if let data = UserDefaults.standard.data(forKey: queueKey),
            let tracks = try? JSONDecoder().decode([Track].self, from: data) {
-            self.queuedTracks = tracks
+            self._queuedTracks = tracks
         }
-        self.isShuffled = UserDefaults.standard.bool(forKey: shuffleKey)
-        if isShuffled,
+        self._isShuffled = UserDefaults.standard.bool(forKey: shuffleKey)
+        if _isShuffled,
            let data = UserDefaults.standard.data(forKey: originalQueueKey),
            let tracks = try? JSONDecoder().decode([Track].self, from: data) {
             self.originalQueue = tracks
         }
-        self.repeatMode = RepeatMode(rawValue: UserDefaults.standard.integer(forKey: repeatModeKey)) ?? .off
+        self._repeatMode = RepeatMode(rawValue: UserDefaults.standard.integer(forKey: repeatModeKey)) ?? .off
         if let data = UserDefaults.standard.data(forKey: savedQueueRepeatOneKey),
            let tracks = try? JSONDecoder().decode([Track].self, from: data) {
             self.savedQueueForRepeatOne = tracks
@@ -664,22 +810,22 @@ class AudioPlayerService: ObservableObject {
         // Restore current track (paused state, not auto-playing)
         if let data = UserDefaults.standard.data(forKey: currentTrackKey),
            let track = try? JSONDecoder().decode(Track.self, from: data) {
-            self.currentTrack = track
-            self.currentTrackTitle = track.title
-            self.currentArtistName = track.artist?.name ?? "Unknown Artist"
-            self.currentAlbumTitle = track.album?.title ?? ""
-            self.currentCoverUrl = MonochromeAPI().getImageUrl(id: track.album?.cover)
-            self.isPlaying = false
+            self._currentTrack = track
+            self._currentTrackTitle = track.title
+            self._currentArtistName = track.artist?.name ?? "Unknown Artist"
+            self._currentAlbumTitle = track.album?.title ?? ""
+            self._currentCoverUrl = MonochromeAPI().getImageUrl(id: track.album?.cover)
+            self._isPlaying = false
 
             // Restore saved timestamp and duration for resume
             let savedTime = UserDefaults.standard.double(forKey: savedTimestampKey)
             if savedTime > 0 {
                 self.restoredTimestamp = savedTime
-                self.currentTime = savedTime
+                self.playbackProgress.currentTime = savedTime
             }
             let savedDuration = UserDefaults.standard.double(forKey: savedDurationKey)
             if savedDuration > 0 {
-                self.duration = savedDuration
+                self.playbackProgress.duration = savedDuration
             }
         }
         updateRemoteCommandState()
@@ -717,3 +863,12 @@ class AudioPlayerService: ObservableObject {
         removeTimeObserver()
     }
 }
+
+// MARK: - Observable conformance (iOS 17+)
+// When both Observable and ObservableObject are present, SwiftUI prefers Observable
+// → fine-grained per-property tracking instead of coarse objectWillChange.
+
+#if canImport(Observation)
+@available(iOS 17.0, *)
+extension AudioPlayerService: Observable {}
+#endif

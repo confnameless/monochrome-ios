@@ -378,8 +378,10 @@ private struct GlobalSwipeUpHandler: UIViewRepresentable {
 }
 
 #Preview {
-    MainTabView()
-        .environmentObject(AudioPlayerService())
+    let player = AudioPlayerService()
+    return MainTabView()
+        .environmentObject(player)
+        .environmentObject(player.playbackProgress)
         .environmentObject(LibraryManager.shared)
         .environmentObject(AuthService.shared)
         .environmentObject(PlaylistManager.shared)

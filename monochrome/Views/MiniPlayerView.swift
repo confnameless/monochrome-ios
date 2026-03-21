@@ -3,6 +3,7 @@ import SwiftUI
 struct MiniPlayerView: View {
     @Binding var expansion: CGFloat
     @EnvironmentObject private var audioPlayer: AudioPlayerService
+    @EnvironmentObject private var playbackProgress: PlaybackProgress
     @EnvironmentObject private var libraryManager: LibraryManager
 
     @State private var swipeOffset: CGFloat = 0
@@ -44,7 +45,7 @@ struct MiniPlayerView: View {
 
             // Progress bar
             GeometryReader { geo in
-                let progress = audioPlayer.duration > 0 ? (audioPlayer.currentTime / audioPlayer.duration) : 0
+                let progress = playbackProgress.duration > 0 ? (playbackProgress.currentTime / playbackProgress.duration) : 0
                 ZStack(alignment: .leading) {
                     Rectangle().fill(Theme.border.opacity(0.3))
                     Rectangle().fill(Theme.foreground)

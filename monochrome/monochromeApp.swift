@@ -16,6 +16,7 @@ struct MonochromeIOSApp: App {
         WindowGroup {
             MainTabView()
                 .environmentObject(audioPlayerService)
+                .environmentObject(audioPlayerService.playbackProgress)
                 .environmentObject(libraryManager)
                 .environmentObject(authService)
                 .environmentObject(playlistManager)

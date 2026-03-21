@@ -5,6 +5,7 @@ struct NowPlayingView: View {
     @Binding var navigationPath: CompatNavigationPath
 
     @EnvironmentObject private var audioPlayer: AudioPlayerService
+    @EnvironmentObject private var playbackProgress: PlaybackProgress
     @EnvironmentObject private var libraryManager: LibraryManager
     @EnvironmentObject private var downloadManager: DownloadManager
     @State private var showQueue = false
@@ -277,17 +278,17 @@ struct NowPlayingView: View {
         VStack(spacing: 6) {
             Slider(
                 value: Binding(
-                    get: { audioPlayer.currentTime },
+                    get: { playbackProgress.currentTime },
                     set: { audioPlayer.seek(to: $0) }
                 ),
-                in: 0...(audioPlayer.duration > 0 ? audioPlayer.duration : 1)
+                in: 0...(playbackProgress.duration > 0 ? playbackProgress.duration : 1)
             )
             .tint(.white)
 
             HStack {
-                Text(formatTime(audioPlayer.currentTime))
+                Text(formatTime(playbackProgress.currentTime))
                 Spacer()
-                Text("-" + formatTime(max(0, audioPlayer.duration - audioPlayer.currentTime)))
+                Text("-" + formatTime(max(0, playbackProgress.duration - playbackProgress.currentTime)))
             }
             .font(.system(size: 11, weight: .medium, design: .monospaced))
             .foregroundColor(.white.opacity(0.5))

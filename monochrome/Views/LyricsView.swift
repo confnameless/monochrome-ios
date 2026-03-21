@@ -8,6 +8,7 @@ struct LyricLine: Identifiable {
 
 struct LyricsView: View {
     @EnvironmentObject private var audioPlayer: AudioPlayerService
+    @EnvironmentObject private var playbackProgress: PlaybackProgress
 
     @State private var syncedLines: [LyricLine] = []
     @State private var plainLyrics: String?
@@ -45,7 +46,7 @@ struct LyricsView: View {
 
     private var currentLineIndex: Int {
         guard !syncedLines.isEmpty else { return -1 }
-        let time = audioPlayer.currentTime
+        let time = playbackProgress.currentTime
         var idx = -1
         for (i, line) in syncedLines.enumerated() {
             if time >= line.time - 0.1 {
