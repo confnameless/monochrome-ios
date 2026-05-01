@@ -8,7 +8,8 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Build archive
         run: |
@@ -30,7 +31,9 @@ jobs:
           <plist version="1.0">
           <dict>
               <key>method</key>
-              <string>development</string>
+              <string>ad-hoc</string>
+              <key>signingStyle</key>
+              <string>manual</string>
               <key>compileBitcode</key>
               <false/>
           </dict>
