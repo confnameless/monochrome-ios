@@ -1,34 +1,24 @@
-name: Build IPA
+- name: Create export options
+  run: |
+    cat > exportOptions.plist <<EOF
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" 
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>method</key>
+        <string>development</string>
+        <key>compileBitcode</key>
+        <false/>
+    </dict>
+    </plist>
+    EOF
 
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: macos-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build archive
-        run: |
-          xcodebuild -scheme monochrome \
-          -sdk iphoneos \
-          -configuration Release \
-          archive -archivePath build/monochrome.xcarchive \
-          CODE_SIGNING_ALLOWED=NO
-
-      - name: Export IPA
-        run: |
-          mkdir -p build/ipa
-          xcodebuild -exportArchive \
-          -archivePath build/monochrome.xcarchive \
-          -exportOptionsPlist /dev/null \
-          -exportPath build/ipa \
-          CODE_SIGNING_ALLOWED=NO
-
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: monochrome-ipa
-          path: build/ipa
+- name: Export IPA
+  run: |
+    mkdir -p build/ipa
+    xcodebuild -exportArchive \
+    -archivePath build/monochrome.xcarchive \
+    -exportOptionsPlist exportOptions.plist \
+    -exportPath build/ipa \
+    CODE_SIGNING_ALLOWED=NO
