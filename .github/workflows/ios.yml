@@ -1,86 +1,34 @@
-name: Build IPA (Latest Xcode)
+name: Build IPA
 
 on:
-  push:
-    branches: [ "master" ]
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build unsigned IPA
-    runs-on: macos-26
+    runs-on: macos-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Select latest Xcode (26.x)
+      - name: Build archive
         run: |
-          set -e
+          xcodebuild -scheme monochrome \
+          -sdk iphoneos \
+          -configuration Release \
+          archive -archivePath build/monochrome.xcarchive \
+          CODE_SIGNING_ALLOWED=NO
 
-          echo "Available Xcode versions:"
-          ls /Applications | grep Xcode
-
-          # Force latest stable Xcode installed
-          if [ -d "/Applications/Xcode_26.2.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_26.2.app
-          else
-            sudo xcode-select -s /Applications/Xcode.app
-          fi
-
-          xcodebuild -version
-
-      - name: Build & Archive
+      - name: Export IPA
         run: |
-          set -e
-
-          SCHEME="monochrome"
-          APP_NAME="monochrome"
-          BUILD_DIR="$GITHUB_WORKSPACE/build"
-          ARCHIVE_PATH="$BUILD_DIR/$APP_NAME.xcarchive"
-
-          rm -rf "$BUILD_DIR"
-          mkdir -p "$BUILD_DIR"
-
-          echo "Archiving with latest iOS SDK..."
-
-          xcodebuild archive \
-            -project "$APP_NAME.xcodeproj" \
-            -scheme "$SCHEME" \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$ARCHIVE_PATH" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            -quiet
-
-      - name: Create IPA
-        run: |
-          set -e
-
-          APP_NAME="monochrome"
-          BUILD_DIR="$GITHUB_WORKSPACE/build"
-          ARCHIVE_PATH="$BUILD_DIR/$APP_NAME.xcarchive"
-          IPA_PATH="$GITHUB_WORKSPACE/$APP_NAME.ipa"
-
-          APP_PATH="$ARCHIVE_PATH/Products/Applications/$APP_NAME.app"
-
-          if [ ! -d "$APP_PATH" ]; then
-            echo "❌ App not found"
-            exit 1
-          fi
-
-          echo "Packaging IPA..."
-
-          mkdir Payload
-          cp -r "$APP_PATH" Payload/
-          zip -r -q "$IPA_PATH" Payload
-          rm -rf Payload
-
-          echo "✅ IPA created: $IPA_PATH"
+          mkdir -p build/ipa
+          xcodebuild -exportArchive \
+          -archivePath build/monochrome.xcarchive \
+          -exportOptionsPlist /dev/null \
+          -exportPath build/ipa \
+          CODE_SIGNING_ALLOWED=NO
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: monochrome.ipa
-          path: monochrome.ipa
+          name: monochrome-ipa
+          path: build/ipa
